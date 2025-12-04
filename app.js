@@ -340,7 +340,12 @@ async function startGeneration() {
     const transformation = document.getElementById('transformation').value.trim();
     const actionName = document.getElementById('actionName').value.trim();
     const triggerWord = document.getElementById('triggerWord').value.trim();
-    const numPairs = Math.min(100, parseInt(document.getElementById('numPairs').value) || 20); // Cap at 100
+    const numPairs = parseInt(document.getElementById('numPairs').value) || 20;
+    
+    if (numPairs > 40) {
+        alert('Maximum 40 pairs allowed per generation. Please reduce the number of pairs.');
+        return;
+    }
     const maxConcurrent = parseInt(document.getElementById('maxConcurrent')?.value) || 3;
     const aspectRatio = document.getElementById('aspectRatio').value;
     const resolution = document.getElementById('resolution').value;
