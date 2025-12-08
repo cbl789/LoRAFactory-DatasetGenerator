@@ -336,16 +336,21 @@ async function generateSinglePair(prompt, index, total, aspectRatio, resolution,
 }
 
 async function startGeneration() {
+    const numPairsInput = document.getElementById('numPairs');
+    const numPairs = parseInt(numPairsInput.value) || 20;
+    
+    // Strict validation - block if over 40
+    if (numPairs > 40) {
+        alert('⚠️ Maximum 40 pairs allowed!\n\nPlease enter a number between 1 and 40.\n\nIf you need more pairs, run multiple generations - they will accumulate in memory.');
+        numPairsInput.value = 40;
+        numPairsInput.focus();
+        return;
+    }
+    
     const theme = document.getElementById('theme').value.trim();
     const transformation = document.getElementById('transformation').value.trim();
     const actionName = document.getElementById('actionName').value.trim();
     const triggerWord = document.getElementById('triggerWord').value.trim();
-    const numPairs = parseInt(document.getElementById('numPairs').value) || 20;
-    
-    if (numPairs > 40) {
-        alert('Maximum 40 pairs allowed per generation. Please reduce the number of pairs.');
-        return;
-    }
     const maxConcurrent = parseInt(document.getElementById('maxConcurrent')?.value) || 3;
     const aspectRatio = document.getElementById('aspectRatio').value;
     const resolution = document.getElementById('resolution').value;
