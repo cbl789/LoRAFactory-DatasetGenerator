@@ -15,12 +15,36 @@
 
 ## ✨ Features
 
+- **3 Generation Modes**:
+  - 🔄 **Pair Mode** - START → END transformation pairs for image editing LoRAs
+  - 🖼️ **Single Image** - Style/aesthetic images for Z-Image and style LoRAs
+  - 📷 **Reference Image** - Upload a character/product and generate variations
+- **🧠 Custom System Prompt** - Full control over AI prompt generation
 - **Zero server setup** - Runs entirely in your browser
 - **Direct FAL API calls** - Talks to FAL servers directly
-- **Parallel generation** - Generate multiple pairs simultaneously
+- **Parallel generation** - Generate multiple images simultaneously
 - **ZIP download** - Download your complete dataset as a ZIP file
 - **Vision captions** - AI-powered image descriptions
 - **Trigger word support** - Add custom prefixes to your training data
+
+## 🎯 Generation Modes
+
+### 🔄 Pair Mode (Default)
+Generate START → END image pairs for training image editing models.
+- Define a transformation (e.g., "zoom out", "add background", "change lighting")
+- AI generates creative base prompts + edit instructions
+- Perfect for: Flux 2, Qwen Image Edit, instruction-based models
+
+### 🖼️ Single Image Mode
+Generate single images with captions for style/aesthetic LoRAs.
+- No before/after - just beautiful images with detailed captions
+- Perfect for: Z-Image, style transfer, aesthetic LoRAs
+
+### 📷 Reference Image Mode
+Upload a reference image and generate variations.
+- Upload a character, product, or style reference
+- AI creates diverse variations while maintaining consistency
+- Perfect for: Character LoRAs, product photography, consistent style training
 
 ## 🚀 Quick Start
 
@@ -31,27 +55,25 @@ Simply open `index.html` in your browser!
 
 ### Option 2: Local Server (Recommended)
 ```bash
-cd dist
 python -m http.server 3000
 # Open http://localhost:3000
 ```
 
 Or with Node.js:
 ```bash
-npx serve dist
+npx serve .
 ```
 
 ### Option 3: Host Online (Free)
 Upload these 3 files to any static hosting:
 - **GitHub Pages** - Free, just push to a repo
-- **Netlify** - Drag & drop the `dist` folder
+- **Netlify** - Drag & drop the folder
 - **Vercel** - Connect your repo
 - **Cloudflare Pages** - Free tier available
 
 ## 📁 Files
 
 ```
-dist/
 ├── index.html    # Main page
 ├── app.js        # Application logic (calls FAL API directly)
 ├── style.css     # Styling
@@ -76,7 +98,9 @@ dist/
 
 Vision captions: ~$0.002 per image
 
-**Example**: 20 pairs × 2 images × $0.15 = ~$6.00
+**Examples**:
+- Pair Mode: 20 pairs × 2 images × $0.15 = ~$6.00
+- Single/Reference Mode: 20 images × $0.15 = ~$3.00
 
 ## 🎯 How It Works
 
@@ -84,10 +108,10 @@ Vision captions: ~$0.002 per image
 ┌─────────────────────────────────────────────────────────────┐
 │                     YOUR BROWSER                            │
 │                                                             │
-│  1. Enter theme + transformation                            │
-│  2. AI generates creative prompts (via FAL LLM)            │
-│  3. Generate START images (via FAL nano-banana-pro)        │
-│  4. Generate END images (via FAL nano-banana-pro/edit)     │
+│  1. Choose mode (Pair / Single / Reference)                │
+│  2. Enter theme + customization                            │
+│  3. AI generates creative prompts (via FAL LLM)            │
+│  4. Generate images (via FAL nano-banana-pro)              │
 │  5. Optional: Vision captions (via FAL OpenRouter)         │
 │  6. Download as ZIP                                         │
 │                                                             │
@@ -101,7 +125,7 @@ Vision captions: ~$0.002 per image
 
 ## 📦 Output Format
 
-The ZIP file contains:
+### Pair Mode
 ```
 nanobanana_dataset_TIMESTAMP.zip
 ├── 0001_start.png    # Starting image
@@ -113,9 +137,19 @@ nanobanana_dataset_TIMESTAMP.zip
 └── ...
 ```
 
-This format is compatible with:
+### Single / Reference Mode
+```
+nanobanana_dataset_TIMESTAMP.zip
+├── 0001.png          # Generated image
+├── 0001.txt          # Caption
+├── 0002.png
+├── 0002.txt
+└── ...
+```
+
+Compatible with:
 - **Flux 2** - LoRA fine-tuning
-- **Z-Image** - Image editing training
+- **Z-Image** - Style/aesthetic training
 - **Qwen Image Edit** - Instruction-based editing
 - **SDXL** - Fine-tuning and LoRA
 - **Any image-to-image model** - Universal format
@@ -124,34 +158,37 @@ This format is compatible with:
 
 | Setting | Description |
 |---------|-------------|
+| **Mode** | Pair, Single Image, or Reference Image |
 | **Theme** | What kind of images to generate (e.g., "portraits of diverse people") |
-| **Transformation** | What change to learn (e.g., "zoom out from close-up to full body") |
+| **Transformation** | (Pair mode only) What change to learn |
+| **Reference Image** | (Reference mode only) Upload character/product/style image |
+| **Custom System Prompt** | Customize how AI generates prompts |
 | **Action Name** | Optional - AI generates one if empty |
 | **Trigger Word** | Optional - Prepended to all .txt files (e.g., "MYZOOM") |
-| **Pairs** | Number of image pairs to generate |
+| **Number of Items** | Max 40 per generation (run multiple times for more) |
 | **Parallel** | How many to generate simultaneously (1-10) |
 | **Resolution** | 1K, 2K, or 4K |
-| **Vision Captions** | Use AI to describe the END image |
+| **Vision Captions** | Use AI to describe generated images |
 
 ## 🔧 Customization
 
-### Change LLM Model
-Edit `app.js` line ~150:
-```javascript
-const llmModel = document.getElementById('llmModel').value;
-```
+### Custom System Prompt
+The system prompt controls how the AI generates creative prompts. Edit it to:
+- Focus on specific styles or aesthetics
+- Add constraints or rules
+- Target specific use cases
 
-Available models:
+Default prompts are optimized for each mode but can be fully customized.
+
+### Change LLM Model
+Available in the Settings panel:
 - `google/gemini-2.5-flash` (fast, cheap)
 - `google/gemini-2.5-pro` (better quality)
 - `anthropic/claude-3.5-sonnet` (excellent quality)
 - `openai/gpt-4o` (excellent quality)
 
-### Change Parallel Requests
-Default is 3. Increase for faster generation (but may hit rate limits):
-```html
-<input type="number" id="maxConcurrent" value="5" min="1" max="10">
-```
+### Parallel Requests
+Default is 3. Increase for faster generation (but may hit rate limits).
 
 ## 🐛 Troubleshooting
 
@@ -171,6 +208,10 @@ python -m http.server 3000
 - Use 1K resolution instead of 4K
 - Disable vision captions for faster generation
 
+### LLM Parser errors
+- Keep number of items ≤ 40 per generation
+- Run multiple generations if you need more
+
 ## 📜 License
 
 MIT - Use freely for any purpose.
@@ -184,4 +225,3 @@ MIT - Use freely for any purpose.
 ---
 
 Made with 🍌 for the AI art community
-
