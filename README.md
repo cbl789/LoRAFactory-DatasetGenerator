@@ -1,15 +1,29 @@
-# 🍌 NanoBanana Pro LoRA Dataset Generator
+# 🏭 LoRAFactory - Multi-Provider Dataset Generator
 
-> **Create training datasets for image editing models in minutes!**
+> **Create training datasets for image editing models with ANY AI provider!**
 > 
-> Uses **FAL.ai API** with **Nano Banana Pro** to generate high-quality image pairs for training **Flux 2**, **Z-Image**, **Qwen Image Edit**, and other image-to-image models.
+> Enhanced fork of [NanoBanana LoRA Dataset Generator](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io with **multi-provider architecture** supporting FAL.ai, OpenAI, Replicate, and more.
 
-![NanoBanana Pro LoRA Dataset Generator](screenshot.png)
+![LoRAFactory Dataset Generator](screenshot.png)
+
+## ✨ What's New in LoRAFactory
+
+**7 major enhancements over the original**:
+
+- **🔌 Multi-Provider Support** - Extensible architecture for FAL.ai, OpenAI, Replicate, and more
+- **🔐 AES-256 Encryption** - Military-grade API key encryption with password protection
+- **💰 Live Pricing** - Real-time model pricing fetched from FAL.ai API
+- **📦 Reference Image in ZIP** - Uploaded reference automatically included in dataset
+- **📋 Collapsible Prompts** - Grid view with expandable prompts and copy-to-clipboard
+- **🎨 Enhanced Model Selection** - Dynamic model discovery with pricing and compatibility checks
+- **⚙️ Security Settings** - Session-only storage, auto-clear timer, encryption options
+
+**All original features** (3 modes, vision captions, parallel generation, etc.) from [NanoBanana](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io are preserved.
 
 ## 🔗 Links
 
-- **🚀 Live Demo**: [lovis.io/NanoBananaLoraDatasetGenerator](https://lovis.io/NanoBananaLoraDatasetGenerator)
-- **💻 Source Code**: [github.com/lovisdotio/NanoBananaLoraDatasetGenerator](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator)
+- **💻 Source Code**: [github.com/cbl789/LoRAFactory-DatasetGenerator](https://github.com/cbl789/LoRAFactory-DatasetGenerator)
+- **🍌 Original Project**: [NanoBanana by Lovis.io](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator)
 
 ---
 
@@ -19,13 +33,16 @@
   - 🔄 **Pair Mode** - START → END transformation pairs for image editing LoRAs
   - 🖼️ **Single Image** - Style/aesthetic images for Z-Image and style LoRAs
   - 📷 **Reference Image** - Upload a character/product and generate variations
+- **🎨 Multiple Image Models** - Choose from Nano Banana Pro, Flux 2 Flex, Seedream, Flux Dev/Schnell, Aura Flow, Recraft
 - **🧠 Custom System Prompt** - Full control over AI prompt generation
+- **💰 Transparent Pricing** - See costs per model before generating
 - **Zero server setup** - Runs entirely in your browser
-- **Direct FAL API calls** - Talks to FAL servers directly
+- **Direct API calls** - Talks to AI providers directly
 - **Parallel generation** - Generate multiple images simultaneously
 - **ZIP download** - Download your complete dataset as a ZIP file
-- **Vision captions** - AI-powered image descriptions
+- **Vision captions** - AI-powered image descriptions with multiple LLM options
 - **Trigger word support** - Add custom prefixes to your training data
+- **🔐 Security Features** - API key encryption, session-only storage, auto-clear timer
 
 ## 🎯 Generation Modes
 
@@ -48,12 +65,23 @@ Upload a reference image and generate variations.
 
 ## 🚀 Quick Start
 
-### Option 1: Local (Double-click)
+### Option 1: One-Click Start (Recommended)
+```bash
+./start.sh
+```
+Automatically starts server and opens browser! Press Ctrl+C to stop.
+
+To stop the server manually:
+```bash
+./stop.sh
+```
+
+### Option 2: Local (Double-click)
 Simply open `index.html` in your browser!
 
-> ⚠️ Some browsers block local file API calls. If it doesn't work, use Option 2.
+> ⚠️ Some browsers block local file API calls. If it doesn't work, use Option 1.
 
-### Option 2: Local Server (Recommended)
+### Option 3: Manual Server
 ```bash
 python -m http.server 3000
 # Open http://localhost:3000
@@ -64,31 +92,30 @@ Or with Node.js:
 npx serve .
 ```
 
-### Option 3: Host Online (Free)
-Upload these 3 files to any static hosting:
-- **GitHub Pages** - Free, just push to a repo
-- **Netlify** - Drag & drop the folder
-- **Vercel** - Connect your repo
-- **Cloudflare Pages** - Free tier available
-
 ## 📁 Files
 
 ```
-├── index.html    # Main page
-├── app.js        # Application logic (calls FAL API directly)
-├── style.css     # Styling
-└── README.md     # This file
+├── index.html         # Main page
+├── app.js             # Application logic
+├── api_providers.js   # Provider abstraction layer (NEW!)
+├── style.css          # Styling
+└── README.md          # This file
 ```
 
-## 🔑 API Key
+## 🔑 API Keys
 
-1. Get your free API key at [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)
-2. Click the 🔑 button in the app
-3. Enter your key and save
+1. Click the 🔑 button in the app
+2. Select your provider (FAL.ai, OpenAI, etc.)
+3. Enter your API key and save
 
-**Security**: Your key is stored ONLY in your browser's localStorage. It's never sent anywhere except directly to FAL's servers.
+**Get API Keys**:
+- **FAL.ai**: [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)
+- **OpenAI**: Coming soon
+- **Replicate**: Coming soon
 
-## 💰 Pricing (FAL)
+**Security**: Your keys are stored ONLY in your browser's localStorage. They're never sent anywhere except directly to the selected provider's servers.
+
+## 💰 Pricing (FAL.ai)
 
 | Resolution | Cost per image |
 |------------|----------------|
@@ -102,32 +129,11 @@ Vision captions: ~$0.002 per image
 - Pair Mode: 20 pairs × 2 images × $0.15 = ~$6.00
 - Single/Reference Mode: 20 images × $0.15 = ~$3.00
 
-## 🎯 How It Works
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     YOUR BROWSER                            │
-│                                                             │
-│  1. Choose mode (Pair / Single / Reference)                │
-│  2. Enter theme + customization                            │
-│  3. AI generates creative prompts (via FAL LLM)            │
-│  4. Generate images (via FAL nano-banana-pro)              │
-│  5. Optional: Vision captions (via FAL OpenRouter)         │
-│  6. Download as ZIP                                         │
-│                                                             │
-│  ════════════════════════════════════════════════════════   │
-│                          │                                  │
-│                          ▼                                  │
-│                    FAL API SERVERS                          │
-│                  (All processing here)                      │
-└─────────────────────────────────────────────────────────────┘
-```
-
 ## 📦 Output Format
 
 ### Pair Mode
 ```
-nanobanana_dataset_TIMESTAMP.zip
+lorafactory_dataset_TIMESTAMP.zip
 ├── 0001_start.png    # Starting image
 ├── 0001_end.png      # Transformed image
 ├── 0001.txt          # Action description / caption
@@ -139,7 +145,7 @@ nanobanana_dataset_TIMESTAMP.zip
 
 ### Single / Reference Mode
 ```
-nanobanana_dataset_TIMESTAMP.zip
+lorafactory_dataset_TIMESTAMP.zip
 ├── 0001.png          # Generated image
 ├── 0001.txt          # Caption
 ├── 0002.png
@@ -154,47 +160,27 @@ Compatible with:
 - **SDXL** - Fine-tuning and LoRA
 - **Any image-to-image model** - Universal format
 
-## ⚙️ Configuration
+## 🔧 Adding New Providers
 
-| Setting | Description |
-|---------|-------------|
-| **Mode** | Pair, Single Image, or Reference Image |
-| **Theme** | What kind of images to generate (e.g., "portraits of diverse people") |
-| **Transformation** | (Pair mode only) What change to learn |
-| **Reference Image** | (Reference mode only) Upload character/product/style image |
-| **Custom System Prompt** | Customize how AI generates prompts |
-| **Action Name** | Optional - AI generates one if empty |
-| **Trigger Word** | Optional - Prepended to all .txt files (e.g., "MYZOOM") |
-| **Number of Items** | Max 40 per generation (run multiple times for more) |
-| **Parallel** | How many to generate simultaneously (1-10) |
-| **Resolution** | 1K, 2K, or 4K |
-| **Vision Captions** | Use AI to describe generated images |
+LoRAFactory's modular architecture makes it easy to add new providers:
 
-## 🔧 Customization
+1. Create a new provider class in `api_providers.js`:
+```javascript
+export class OpenAIProvider extends ApiProvider {
+    // Implement required methods
+}
+```
 
-### Custom System Prompt
-The system prompt controls how the AI generates creative prompts. Edit it to:
-- Focus on specific styles or aesthetics
-- Add constraints or rules
-- Target specific use cases
+2. Register it in the `ProviderManager`
+3. Add the option to the HTML dropdown
 
-Default prompts are optimized for each mode but can be fully customized.
-
-### Change LLM Model
-Available in the Settings panel:
-- `google/gemini-2.5-flash` (fast, cheap)
-- `google/gemini-2.5-pro` (better quality)
-- `anthropic/claude-3.5-sonnet` (excellent quality)
-- `openai/gpt-4o` (excellent quality)
-
-### Parallel Requests
-Default is 3. Increase for faster generation (but may hit rate limits).
+See `api_providers.js` for the `FalProvider` reference implementation.
 
 ## 🐛 Troubleshooting
 
 ### "Failed to fetch" errors
 - Check your API key is valid
-- Check you have credits on FAL
+- Check you have credits with your provider
 - Try reducing parallel requests to 1
 
 ### CORS errors when opening locally
@@ -208,20 +194,16 @@ python -m http.server 3000
 - Use 1K resolution instead of 4K
 - Disable vision captions for faster generation
 
-### LLM Parser errors
-- Keep number of items ≤ 40 per generation
-- Run multiple generations if you need more
-
 ## 📜 License
 
 MIT - Use freely for any purpose.
 
 ## 🙏 Credits
 
+- **Original Project**: [NanoBanana LoRA Dataset Generator](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io
 - **FAL.ai** - GPU infrastructure and models
-- **NanoBanana Pro** - Image generation model
 - **OpenRouter** - LLM routing for prompts and captions
 
 ---
 
-Made with 🍌 for the AI art community
+Made with 🏭 for the AI art community

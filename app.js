@@ -1,10 +1,9 @@
 /**
- * NanoBanana Pro LoRA Dataset Generator - Static Version
- * Uses FAL's official client SDK for browser compatibility
+ * LoRAFactory - Multi-Provider Dataset Generator
+ * Uses Provider Pattern for Multi-Vendor Support
  */
 
-// Import FAL client from CDN (named export)
-import { fal } from 'https://esm.sh/@fal-ai/client@1.2.1';
+import { providerManager } from './api_providers.js';
 
 // =============================================================================
 // State
@@ -16,7 +15,8 @@ const state = {
     pairCounter: 0,
     mode: 'pair', // 'pair', 'single', or 'reference'
     referenceImageUrl: null, // URL of uploaded reference image
-    referenceImageBase64: null // Base64 of uploaded reference image
+    referenceImageBase64: null, // Base64 of uploaded reference image
+    imageModel: 'fal-ai/nano-banana-pro' // Selected image generation model
 };
 
 // Default system prompts for each mode
@@ -28,14 +28,14 @@ RULES:
 2. base_prompt: Detailed description for generating the START image
 3. edit_prompt: Instruction for transforming START → END image
 4. action_name: Short identifier for this transformation type`,
-    
+
     single: `You are a creative prompt engineer for AI image generation. Generate diverse, detailed prompts for creating style/aesthetic training data.
 
 RULES:
 1. Each prompt must be unique and creative
 2. prompt: Detailed description capturing the desired aesthetic, style, composition, lighting, and mood
 3. Focus on visual consistency and aesthetic qualities that define the style`,
-    
+
     reference: `You are a creative prompt engineer for AI image generation. Generate diverse prompts for creating variations of a reference image.
 
 RULES:
@@ -44,33 +44,292 @@ RULES:
 3. Vary poses, angles, backgrounds, lighting, and contexts while keeping the subject recognizable`
 };
 
+// Image models list (populated dynamically from FAL API)
+let IMAGE_MODELS = [
+    // Fallback models if API fetch fails
+    {
+        id: 'fal-ai/nano-banana-pro',
+        name: 'Nano Banana Pro',
+        version: '1.0',
+        pricing: '$0.15/image',
+        supportsEdit: true,
+        description: 'Google\'s state-of-the-art model'
+    }
+];
+
+// Models we want to fetch (curated list)
+const CURATED_MODEL_IDS = [
+    'fal-ai/nano-banana-pro',
+    'fal-ai/flux-2-flex',
+    'fal-ai/bytedance/seedream/v4.5/text-to-image',
+    'fal-ai/flux/dev',
+    'fal-ai/flux/schnell',
+    'fal-ai/aura-flow',
+    'fal-ai/recraft/v3/text-to-image'
+];
+
+// Manual configuration for models with special properties
+const MODEL_CONFIG = {
+    'fal-ai/nano-banana-pro': {
+        supportsEdit: true,
+        description: 'Google\'s state-of-the-art model with edit support'
+    },
+    'fal-ai/flux-2-flex': {
+        supportsEdit: true,
+        description: 'Enhanced realism and native editing support'
+    },
+    'fal-ai/bytedance/seedream/v4.5/text-to-image': {
+        supportsEdit: true,
+        editEndpoint: 'fal-ai/bytedance/seedream/v4.5/edit',
+        description: 'ByteDance unified model with i2i and edit support'
+    },
+    'fal-ai/flux/dev': {
+        supportsEdit: false,
+        description: 'Open-source Flux model for development'
+    },
+    'fal-ai/flux/schnell': {
+        supportsEdit: false,
+        description: 'Ultra-fast Flux model'
+    },
+    'fal-ai/aura-flow': {
+        supportsEdit: false,
+        description: 'Open-source flow-based generation'
+    },
+    'fal-ai/recraft/v3/text-to-image': {
+        supportsEdit: false,
+        description: 'Vector art and brand styling'
+    }
+};
+
+// =============================================================================
+// Security & Encryption Utilities
+// =============================================================================
+
+const ENCRYPTION_CONFIG = {
+    algorithm: 'AES-GCM',
+    keyLength: 256,
+    ivLength: 12,
+    saltLength: 16,
+    iterations: 100000
+};
+
+// Derive encryption key from password using PBKDF2
+async function deriveKey(password, salt) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveBits', 'deriveKey']
+    );
+
+    return crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: salt,
+            iterations: ENCRYPTION_CONFIG.iterations,
+            hash: 'SHA-256'
+        },
+        keyMaterial,
+        { name: ENCRYPTION_CONFIG.algorithm, length: ENCRYPTION_CONFIG.keyLength },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+// Encrypt data with password
+async function encryptData(data, password) {
+    const enc = new TextEncoder();
+    const salt = crypto.getRandomValues(new Uint8Array(ENCRYPTION_CONFIG.saltLength));
+    const iv = crypto.getRandomValues(new Uint8Array(ENCRYPTION_CONFIG.ivLength));
+    const key = await deriveKey(password, salt);
+
+    const encrypted = await crypto.subtle.encrypt(
+        { name: ENCRYPTION_CONFIG.algorithm, iv: iv },
+        key,
+        enc.encode(data)
+    );
+
+    // Combine salt + iv + encrypted data
+    const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+
+    return btoa(String.fromCharCode(...combined));
+}
+
+// Decrypt data with password
+async function decryptData(encryptedBase64, password) {
+    try {
+        const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+
+        const salt = combined.slice(0, ENCRYPTION_CONFIG.saltLength);
+        const iv = combined.slice(ENCRYPTION_CONFIG.saltLength, ENCRYPTION_CONFIG.saltLength + ENCRYPTION_CONFIG.ivLength);
+        const encrypted = combined.slice(ENCRYPTION_CONFIG.saltLength + ENCRYPTION_CONFIG.ivLength);
+
+        const key = await deriveKey(password, salt);
+
+        const decrypted = await crypto.subtle.decrypt(
+            { name: ENCRYPTION_CONFIG.algorithm, iv: iv },
+            key,
+            encrypted
+        );
+
+        return new TextDecoder().decode(decrypted);
+    } catch (e) {
+        throw new Error('Decryption failed - incorrect password or corrupted data');
+    }
+}
+
 // =============================================================================
 // API Key Management
 // =============================================================================
 
-function getApiKey() {
-    return localStorage.getItem('fal_api_key') || '';
+// Security settings stored in localStorage
+function getSecuritySettings() {
+    const defaults = {
+        useEncryption: false,
+        useSessionStorage: false,
+        autoClockMinutes: 0 // 0 = disabled
+    };
+    const stored = localStorage.getItem('security_settings');
+    return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
 }
 
-function setApiKey(key) {
-    if (key) {
-        localStorage.setItem('fal_api_key', key);
-        // Configure FAL client with the key
-        fal.config({ credentials: key });
-    } else {
-        localStorage.removeItem('fal_api_key');
+function setSecuritySettings(settings) {
+    localStorage.setItem('security_settings', JSON.stringify(settings));
+}
+
+// Get the appropriate storage
+function getStorage() {
+    const settings = getSecuritySettings();
+    return settings.useSessionStorage ? sessionStorage : localStorage;
+}
+
+// Get stored API key (decrypt if needed)
+async function getApiKey() {
+    const settings = getSecuritySettings();
+    const storage = getStorage();
+    const stored = storage.getItem('fal_api_key');
+
+    if (!stored) return '';
+
+    if (settings.useEncryption) {
+        // Key is encrypted, need password
+        const password = sessionStorage.getItem('encryption_password');
+        if (!password) {
+            return ''; // Password not in session, need to re-enter
+        }
+        try {
+            return await decryptData(stored, password);
+        } catch (e) {
+            console.error('Decryption failed:', e);
+            return '';
+        }
     }
+
+    return stored;
+}
+
+// Set API key (encrypt if needed)
+async function setApiKey(key, password = null) {
+    const settings = getSecuritySettings();
+    const storage = getStorage();
+
+    if (!key) {
+        storage.removeItem('fal_api_key');
+        sessionStorage.removeItem('encryption_password');
+        // Clear in provider
+        try {
+            providerManager.getActive().setApiKey(null);
+        } catch (e) { }
+        return;
+    }
+
+    if (settings.useEncryption) {
+        if (!password) {
+            throw new Error('Password required for encryption');
+        }
+        const encrypted = await encryptData(key, password);
+        storage.setItem('fal_api_key', encrypted);
+        // Store password in session for this session
+        sessionStorage.setItem('encryption_password', password);
+    } else {
+        storage.setItem('fal_api_key', key);
+    }
+
+    // Configure Active Provider with the key
+    await providerManager.getActive().setApiKey(key);
+
+    // Setup auto-clear if enabled
+    setupAutoClear();
+}
+
+// Auto-clear functionality
+let autoClearTimer = null;
+
+function setupAutoClear() {
+    const settings = getSecuritySettings();
+
+    // Clear existing timer
+    if (autoClearTimer) {
+        clearTimeout(autoClearTimer);
+        autoClearTimer = null;
+    }
+
+    // Setup new timer if enabled
+    if (settings.autoClockMinutes > 0) {
+        const ms = settings.autoClockMinutes * 60 * 1000;
+        autoClearTimer = setTimeout(() => {
+            clearApiKeyFromMemory();
+            alert('⏰ API key cleared due to inactivity');
+            updateStatus(false, 'Key cleared (inactivity)');
+        }, ms);
+    }
+}
+
+// Reset auto-clear timer on activity
+function resetAutoClearTimer() {
+    const settings = getSecuritySettings();
+    if (settings.autoClockMinutes > 0) {
+        setupAutoClear();
+    }
+}
+
+// Clear API key from memory
+function clearApiKeyFromMemory() {
+    getStorage().removeItem('fal_api_key');
+    sessionStorage.removeItem('encryption_password');
 }
 
 function showApiKeyModal() {
     document.getElementById('apiKeyModal').classList.remove('hidden');
+    loadApiKeyIntoModal();
+}
+
+async function loadApiKeyIntoModal() {
     const input = document.getElementById('apiKeyInput');
-    input.value = getApiKey();
+    const passwordSection = document.getElementById('encryptionPasswordSection');
+    const settings = getSecuritySettings();
+
+    // Show/hide password field based on encryption setting
+    if (settings.useEncryption) {
+        passwordSection.classList.remove('hidden');
+    } else {
+        passwordSection.classList.add('hidden');
+    }
+
+    // Load existing key if available
+    const key = await getApiKey();
+    input.value = key;
     input.focus();
 }
 
 function hideApiKeyModal() {
     document.getElementById('apiKeyModal').classList.add('hidden');
+    document.getElementById('encryptionPassword').value = '';
 }
 
 function toggleKeyVisibility() {
@@ -85,23 +344,114 @@ function toggleKeyVisibility() {
     }
 }
 
-function saveApiKey() {
+async function saveApiKey() {
     const key = document.getElementById('apiKeyInput').value.trim();
     if (!key) {
         alert('Please enter an API key');
         return;
     }
-    setApiKey(key);
-    hideApiKeyModal();
-    updateStatus(true, 'API Key Saved');
+
+    const settings = getSecuritySettings();
+    let password = null;
+
+    if (settings.useEncryption) {
+        password = document.getElementById('encryptionPassword').value;
+        if (!password || password.length < 8) {
+            alert('⚠️ Please enter a password (minimum 8 characters) to encrypt your API key');
+            return;
+        }
+    }
+
+    try {
+        await setApiKey(key, password);
+        hideApiKeyModal();
+        const storageType = settings.useSessionStorage ? 'session' : 'persistent';
+        const encrypted = settings.useEncryption ? ' (encrypted)' : '';
+        updateStatus(true, `API Key Saved ${encrypted}`);
+
+        // Show confirmation with security info
+        const messages = [
+            '✅ API key saved successfully',
+            `🔒 Storage: ${storageType}${encrypted}`
+        ];
+        if (settings.useSessionStorage) {
+            messages.push('ℹ️ Key will be cleared when you close this tab');
+        }
+        if (settings.autoClockMinutes > 0) {
+            messages.push(`⏰ Auto-clear in ${settings.autoClockMinutes} minutes of inactivity`);
+        }
+        alert(messages.join('\n'));
+
+    } catch (error) {
+        alert('❌ Error saving API key: ' + error.message);
+    }
 }
 
-function clearApiKey() {
-    if (confirm('Clear your API key?')) {
-        setApiKey('');
+async function clearApiKey() {
+    if (confirm('⚠️ Clear your API key?\n\nThis will remove it from storage immediately.')) {
+        await setApiKey('');
         document.getElementById('apiKeyInput').value = '';
+        document.getElementById('encryptionPassword').value = '';
         updateStatus(false, 'No API Key');
     }
+}
+
+// Show security settings modal
+function showSecuritySettings() {
+    document.getElementById('securitySettingsModal').classList.remove('hidden');
+
+    // Load current settings
+    const settings = getSecuritySettings();
+    document.getElementById('useEncryption').checked = settings.useEncryption;
+    document.getElementById('useSessionStorage').checked = settings.useSessionStorage;
+    document.getElementById('autoClockMinutes').value = settings.autoClockMinutes || '';
+}
+
+function hideSecuritySettings() {
+    document.getElementById('securitySettingsModal').classList.add('hidden');
+}
+
+async function saveSecuritySettings() {
+    const settings = {
+        useEncryption: document.getElementById('useEncryption').checked,
+        useSessionStorage: document.getElementById('useSessionStorage').checked,
+        autoClockMinutes: parseInt(document.getElementById('autoClockMinutes').value) || 0
+    };
+
+    const oldSettings = getSecuritySettings();
+
+    // If encryption or storage type changed, need to re-save key
+    if (settings.useEncryption !== oldSettings.useEncryption ||
+        settings.useSessionStorage !== oldSettings.useSessionStorage) {
+
+        const hasKey = await getApiKey();
+        if (hasKey) {
+            if (!confirm('⚠️ Changing security settings requires re-entering your API key.\n\nYour current key will be cleared. Continue?')) {
+                return;
+            }
+            await setApiKey(''); // Clear old key
+        }
+    }
+
+    setSecuritySettings(settings);
+    hideSecuritySettings();
+    alert('✅ Security settings updated!\n\n' +
+        (settings.useEncryption !== oldSettings.useEncryption ||
+            settings.useSessionStorage !== oldSettings.useSessionStorage
+            ? 'Please re-enter your API key.' : 'Settings saved.'));
+
+    if (settings.useEncryption !== oldSettings.useEncryption ||
+        settings.useSessionStorage !== oldSettings.useSessionStorage) {
+        showApiKeyModal();
+    }
+
+    // Setup auto-clear with new settings
+    setupAutoClear();
+}
+
+function dismissSecurityBanner() {
+    document.getElementById('securityBanner').style.display = 'none';
+    localStorage.setItem('security_banner_dismissed', 'true');
 }
 
 // =============================================================================
@@ -110,17 +460,17 @@ function clearApiKey() {
 
 function setMode(mode) {
     state.mode = mode;
-    
+
     // Update UI buttons
     document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === mode);
     });
-    
+
     // Show/hide transformation section (only for pair mode)
     const transformSection = document.getElementById('transformationSection');
     const actionSection = document.getElementById('actionNameSection');
     const referenceSection = document.getElementById('referenceUploadSection');
-    
+
     if (mode === 'pair') {
         transformSection.classList.remove('hidden');
         actionSection.classList.remove('hidden');
@@ -143,10 +493,10 @@ function setMode(mode) {
         document.getElementById('countLabel').textContent = 'images in memory';
         document.getElementById('progressLabel').textContent = 'images';
     }
-    
+
     // Update cost estimate
     updateCostEstimate();
-    
+
     // Update default system prompt placeholder
     updateSystemPromptPlaceholder();
 }
@@ -160,7 +510,7 @@ function toggleSystemPrompt() {
     const section = document.getElementById('systemPromptSection');
     const icon = document.getElementById('systemPromptIcon');
     const isHidden = section.classList.contains('hidden');
-    
+
     section.classList.toggle('hidden');
     icon.textContent = isHidden ? '▼' : '▶';
 }
@@ -181,16 +531,16 @@ function getSystemPrompt() {
 function handleReferenceUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onload = (e) => {
         state.referenceImageBase64 = e.target.result;
-        
+
         // Show preview
         const preview = document.getElementById('referencePreview');
         const placeholder = document.getElementById('uploadPlaceholder');
         const clearBtn = document.getElementById('clearRefBtn');
-        
+
         preview.src = e.target.result;
         preview.classList.remove('hidden');
         placeholder.classList.add('hidden');
@@ -202,12 +552,12 @@ function handleReferenceUpload(event) {
 function clearReference() {
     state.referenceImageBase64 = null;
     state.referenceImageUrl = null;
-    
+
     const preview = document.getElementById('referencePreview');
     const placeholder = document.getElementById('uploadPlaceholder');
     const clearBtn = document.getElementById('clearRefBtn');
     const input = document.getElementById('referenceInput');
-    
+
     preview.classList.add('hidden');
     preview.src = '';
     placeholder.classList.remove('hidden');
@@ -215,43 +565,22 @@ function clearReference() {
     input.value = '';
 }
 
-// Upload reference image to FAL storage
+// Upload reference image to Provider storage
 async function uploadReferenceImage() {
     if (!state.referenceImageBase64) return null;
-    
+
     // Convert base64 to blob
     const response = await fetch(state.referenceImageBase64);
     const blob = await response.blob();
-    
-    // Upload to FAL
-    const url = await fal.storage.upload(blob);
-    state.referenceImageUrl = url;
-    return url;
-}
 
-// =============================================================================
-// FAL API Calls using official SDK
-// =============================================================================
-
-async function falRequest(endpoint, input) {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-        throw new Error('Please add your FAL API key first');
-    }
-    
-    // Ensure FAL is configured
-    fal.config({ credentials: apiKey });
-    
+    // Upload via active provider
     try {
-        // Use FAL's subscribe method which handles queuing
-        // Returns { data, requestId } - we want data
-        console.log(`FAL request to ${endpoint}:`, input);
-        const result = await fal.subscribe(endpoint, { input });
-        console.log(`FAL response from ${endpoint}:`, result);
-        return result.data || result;
-    } catch (error) {
-        console.error(`FAL error for ${endpoint}:`, error);
-        throw new Error(error.message || error.body?.detail || 'FAL API call failed');
+        const url = await providerManager.getActive().uploadImage(blob);
+        state.referenceImageUrl = url;
+        return url;
+    } catch (e) {
+        console.error("Upload failed:", e);
+        throw e;
     }
 }
 
@@ -264,60 +593,66 @@ function sleep(ms) {
 // =============================================================================
 
 async function generateStartImage(prompt, aspectRatio, resolution) {
-    const result = await falRequest('fal-ai/nano-banana-pro', {
+    return await providerManager.getActive().generateImage({
         prompt: prompt,
-        aspect_ratio: aspectRatio,
-        resolution: resolution,  // "1K", "2K", or "4K"
-        num_images: 1
+        aspectRatio: aspectRatio,
+        resolution: resolution,
+        model: state.imageModel
     });
-    
-    return result.images[0].url;
 }
 
 async function generateEndImage(startImageUrl, editPrompt, aspectRatio, resolution) {
-    const result = await falRequest('fal-ai/nano-banana-pro/edit', {
-        image_urls: [startImageUrl],  // Must be array!
+    // Check if model supports edit
+    const selectedModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    if (!selectedModel || !selectedModel.supportsEdit) {
+        throw new Error(`Model ${state.imageModel} doesn't support image editing. Please select a model with edit support for Pair mode.`);
+    }
+
+    // Use custom edit endpoint if specified, otherwise append /edit
+    const editEndpoint = selectedModel.editEndpoint || `${state.imageModel}/edit`;
+
+    return await providerManager.getActive().editImage({
+        sourceUrl: startImageUrl,
         prompt: editPrompt,
-        aspect_ratio: 'auto',  // Edit uses 'auto' by default
-        resolution: resolution
+        resolution: resolution,
+        model: state.imageModel,
+        editEndpoint: editEndpoint
     });
-    
-    return result.images[0].url;
 }
 
 async function generateSingleImage(prompt, aspectRatio, resolution) {
-    const result = await falRequest('fal-ai/nano-banana-pro', {
+    return await providerManager.getActive().generateImage({
         prompt: prompt,
-        aspect_ratio: aspectRatio,
+        aspectRatio: aspectRatio,
         resolution: resolution,
-        num_images: 1
+        model: state.imageModel
     });
-    
-    return result.images[0].url;
 }
 
 async function generateReferenceVariation(referenceUrl, prompt, aspectRatio, resolution) {
-    // Use the edit endpoint with the reference image
-    const result = await falRequest('fal-ai/nano-banana-pro/edit', {
-        image_urls: [referenceUrl],
+    // Check if model supports edit
+    const selectedModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    if (!selectedModel || !selectedModel.supportsEdit) {
+        throw new Error(`Model ${state.imageModel} doesn't support image editing. Please select a model with edit support for Reference mode.`);
+    }
+
+    // Use custom edit endpoint if specified
+    const editEndpoint = selectedModel.editEndpoint;
+
+    return await providerManager.getActive().editImage({
+        sourceUrl: referenceUrl,
         prompt: prompt,
-        aspect_ratio: 'auto',
-        resolution: resolution
+        resolution: resolution,
+        model: state.imageModel,
+        editEndpoint: editEndpoint
     });
-    
-    return result.images[0].url;
 }
 
 async function captionImage(imageUrl, model) {
-    const result = await falRequest('openrouter/router/vision', {
-        model: model,
-        prompt: "Caption this image for a text-to-image model. Describe everything visible in detail: subject, appearance, clothing, pose, expression, background, lighting, colors, style. Be specific and comprehensive.",
-        system_prompt: "Only answer the question, do not provide any additional information. Don't use markdown.",
-        image_urls: [imageUrl],  // Must be array!
-        temperature: 1.0
+    return await providerManager.getActive().captionImage({
+        imageUrl: imageUrl,
+        model: model
     });
-    
-    return result.output;
 }
 
 // =============================================================================
@@ -326,13 +661,14 @@ async function captionImage(imageUrl, model) {
 
 async function generatePromptsWithLLM(theme, transformation, actionName, numPrompts, model) {
     const customSystemPrompt = getSystemPrompt();
-    
+    let prompts = [];
+
     if (state.mode === 'pair') {
-        // Pair mode - generate base_prompt + edit_prompt
-        const actionHint = actionName 
-            ? `Use this action name: "${actionName}"` 
+        // Pair mode logic
+        const actionHint = actionName
+            ? `Use this action name: "${actionName}"`
             : 'Generate a short, descriptive action name (like "unzoom", "add_bg", "enhance")';
-        
+
         const systemPrompt = `${customSystemPrompt}
 
 The transformation to learn: "${transformation}"
@@ -348,26 +684,11 @@ Return ONLY valid JSON array:
     "action_name": "short_action"
   }
 ]`;
-
-        const result = await falRequest('fal-ai/any-llm', {
-            model: model,
-            system_prompt: systemPrompt,
-            prompt: userPrompt,
-            max_tokens: 16000
+        prompts = await providerManager.getActive().generatePrompts({
+            systemPrompt, userPrompt, count: numPrompts, model
         });
-        
-        const text = result.output;
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
-            throw new Error('Failed to parse LLM response');
-        }
-        
-        return JSON.parse(jsonMatch[0]);
-        
-    } else if (state.mode === 'single') {
-        // Single mode - generate just prompts for style/aesthetic images
-        const systemPrompt = customSystemPrompt;
 
+    } else if (state.mode === 'single') {
         const userPrompt = `Generate ${numPrompts} unique image prompts for the theme/style: "${theme}"
 
 Return ONLY valid JSON array:
@@ -376,26 +697,14 @@ Return ONLY valid JSON array:
     "prompt": "detailed image description capturing the style, aesthetic, composition, lighting, colors..."
   }
 ]`;
-
-        const result = await falRequest('fal-ai/any-llm', {
-            model: model,
-            system_prompt: systemPrompt,
-            prompt: userPrompt,
-            max_tokens: 16000
+        prompts = await providerManager.getActive().generatePrompts({
+            systemPrompt: customSystemPrompt,
+            userPrompt,
+            count: numPrompts,
+            model
         });
-        
-        const text = result.output;
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
-            throw new Error('Failed to parse LLM response');
-        }
-        
-        return JSON.parse(jsonMatch[0]);
-        
-    } else if (state.mode === 'reference') {
-        // Reference mode - generate prompts for variations of reference image
-        const systemPrompt = customSystemPrompt;
 
+    } else if (state.mode === 'reference') {
         const userPrompt = `Generate ${numPrompts} unique variation prompts for: "${theme}"
 
 These prompts will be used to create variations of a reference image (character/product/style).
@@ -407,22 +716,15 @@ Return ONLY valid JSON array:
     "prompt": "detailed description of the variation, keeping subject consistent but varying context..."
   }
 ]`;
-
-        const result = await falRequest('fal-ai/any-llm', {
-            model: model,
-            system_prompt: systemPrompt,
-            prompt: userPrompt,
-            max_tokens: 16000
+        prompts = await providerManager.getActive().generatePrompts({
+            systemPrompt: customSystemPrompt,
+            userPrompt,
+            count: numPrompts,
+            model
         });
-        
-        const text = result.output;
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
-            throw new Error('Failed to parse LLM response');
-        }
-        
-        return JSON.parse(jsonMatch[0]);
     }
+
+    return prompts;
 }
 
 // =============================================================================
@@ -447,14 +749,14 @@ function updateCostEstimate() {
     const numPairs = parseInt(document.getElementById('numPairs').value) || 20;
     const useVision = document.getElementById('useVisionCaption').checked;
     const resolution = document.getElementById('resolution').value;
-    
+
     const imagesPerItem = state.mode === 'pair' ? 2 : 1; // Pair mode = 2 images, single/reference = 1
     const imageCost = getImageCost();
     const baseCost = numPairs * imagesPerItem * imageCost;
     const visionCost = useVision ? numPairs * (state.mode === 'pair' ? 2 : 1) * 0.002 : 0;
     const llmCost = 0.02;
     const total = baseCost + visionCost + llmCost;
-    
+
     const resLabel = resolution === '4K' ? ' @4K' : '';
     document.getElementById('costEstimate').textContent = `~$${total.toFixed(2)}${resLabel}`;
 }
@@ -495,12 +797,15 @@ function addResultCard(item) {
     const container = document.getElementById('results');
     const card = document.createElement('div');
     card.className = 'result-card';
-    
+
     if (state.mode === 'pair') {
         // Pair mode - show START and END images
         card.innerHTML = `
             <div class="result-header">
                 <span class="result-id">#${item.id}</span>
+                <button class="btn-toggle-prompts" onclick="togglePrompts('${item.id}')" title="Show/Hide All Prompts">
+                    <span class="toggle-icon">▼</span> Prompts
+                </button>
             </div>
             <div class="result-images">
                 <div class="result-image">
@@ -512,22 +817,152 @@ function addResultCard(item) {
                     <img src="${item.endUrl}" alt="End" loading="lazy">
                 </div>
             </div>
+            <div class="result-prompts collapsed" id="prompts-${item.id}">
+                <div class="prompt-section" id="section-${item.id}-start">
+                    <div class="prompt-header" onclick="toggleSection('section-${item.id}-start')">
+                        <span class="prompt-label"><span class="prompt-toggle-icon">▼</span> 📝 START Prompt:</span>
+                        <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'start')" title="Copy to clipboard">📋</button>
+                    </div>
+                    <div class="prompt-content">
+                        <div class="prompt-text" id="prompt-${item.id}-start">${escapeHtml(item.startPrompt || '')}</div>
+                    </div>
+                </div>
+                <div class="prompt-section" id="section-${item.id}-edit">
+                    <div class="prompt-header" onclick="toggleSection('section-${item.id}-edit')">
+                        <span class="prompt-label"><span class="prompt-toggle-icon">▼</span> 🔄 EDIT Prompt:</span>
+                        <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'edit')" title="Copy to clipboard">📋</button>
+                    </div>
+                    <div class="prompt-content">
+                        <div class="prompt-text" id="prompt-${item.id}-edit">${escapeHtml(item.endPrompt || '')}</div>
+                    </div>
+                </div>
+                ${item.text ? `
+                <div class="prompt-section" id="section-${item.id}-caption">
+                    <div class="prompt-header" onclick="toggleSection('section-${item.id}-caption')">
+                        <span class="prompt-label"><span class="prompt-toggle-icon">▼</span> 🏷️ Caption:</span>
+                        <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'caption')" title="Copy to clipboard">📋</button>
+                    </div>
+                    <div class="prompt-content">
+                        <div class="prompt-text" id="prompt-${item.id}-caption">${escapeHtml(item.text)}</div>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
         `;
     } else {
         // Single/Reference mode - show single image
         card.innerHTML = `
             <div class="result-header">
                 <span class="result-id">#${item.id}</span>
+                <button class="btn-toggle-prompts" onclick="togglePrompts('${item.id}')" title="Show/Hide All Prompts">
+                    <span class="toggle-icon">▼</span> Prompts
+                </button>
             </div>
             <div class="result-images single">
                 <div class="result-image">
                     <img src="${item.imageUrl}" alt="Generated" loading="lazy">
                 </div>
             </div>
+            <div class="result-prompts collapsed" id="prompts-${item.id}">
+                <div class="prompt-section" id="section-${item.id}-prompt">
+                    <div class="prompt-header" onclick="toggleSection('section-${item.id}-prompt')">
+                        <span class="prompt-label"><span class="prompt-toggle-icon">▼</span> 📝 Generation Prompt:</span>
+                        <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'prompt')" title="Copy to clipboard">📋</button>
+                    </div>
+                    <div class="prompt-content">
+                        <div class="prompt-text" id="prompt-${item.id}-prompt">${escapeHtml(item.prompt || '')}</div>
+                    </div>
+                </div>
+                ${item.text && item.text !== item.prompt ? `
+                <div class="prompt-section" id="section-${item.id}-caption">
+                    <div class="prompt-header" onclick="toggleSection('section-${item.id}-caption')">
+                        <span class="prompt-label"><span class="prompt-toggle-icon">▼</span> 🏷️ Caption:</span>
+                        <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'caption')" title="Copy to clipboard">📋</button>
+                    </div>
+                    <div class="prompt-content">
+                        <div class="prompt-text" id="prompt-${item.id}-caption">${escapeHtml(item.text)}</div>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
         `;
     }
-    
+
     container.insertBefore(card, container.firstChild);
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Toggle individual prompt section
+window.toggleSection = function (sectionId) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    // Toggle collapsed class
+    section.classList.toggle('collapsed');
+}
+
+// Toggle prompts visibility (all)
+function togglePrompts(itemId) {
+    const promptsDiv = document.getElementById(`prompts-${itemId}`);
+    const button = event.currentTarget;
+    const icon = button.querySelector('.toggle-icon');
+
+    const isCollapsed = promptsDiv.classList.contains('collapsed');
+
+    if (isCollapsed) {
+        promptsDiv.classList.remove('collapsed');
+        icon.textContent = '▲';
+    } else {
+        promptsDiv.classList.add('collapsed');
+        icon.textContent = '▼';
+    }
+}
+
+// Copy prompt to clipboard
+async function copyPromptToClipboard(itemId, promptType) {
+    const element = document.getElementById(`prompt-${itemId}-${promptType}`);
+    if (!element) return;
+
+    const text = element.textContent;
+
+    try {
+        await navigator.clipboard.writeText(text);
+        // Visual feedback
+        const button = element.parentElement.querySelector('.btn-copy-prompt');
+        const originalText = button.textContent;
+        button.textContent = '✅';
+        setTimeout(() => {
+            button.textContent = originalText;
+        }, 2000);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            const button = element.parentElement.querySelector('.btn-copy-prompt');
+            const originalText = button.textContent;
+            button.textContent = '✅';
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
+        } catch (err2) {
+            alert('Failed to copy to clipboard');
+        }
+        document.body.removeChild(textarea);
+    }
 }
 
 function truncate(str, length) {
@@ -542,17 +977,17 @@ function truncate(str, length) {
 // Generate a single pair (used for parallel execution) - PAIR MODE
 async function generateSinglePair(prompt, index, total, aspectRatio, resolution, useVision, llmModel, triggerWord) {
     addProgressLog(`🎨 [${index + 1}/${total}] Starting: ${truncate(prompt.base_prompt, 35)}...`, 'info');
-    
+
     try {
         // Generate START image
         addProgressLog(`   [${index + 1}] Generating START image...`, 'info');
         const startUrl = await generateStartImage(prompt.base_prompt, aspectRatio, resolution);
         addProgressLog(`   [${index + 1}] START done, generating END...`, 'info');
-        
+
         // Generate END image
         const endUrl = await generateEndImage(startUrl, prompt.edit_prompt, aspectRatio, resolution);
         addProgressLog(`   [${index + 1}] END done!`, 'info');
-        
+
         // Optional: Caption with vision
         let finalText = prompt.action_name;
         if (useVision) {
@@ -563,12 +998,12 @@ async function generateSinglePair(prompt, index, total, aspectRatio, resolution,
                 console.warn('Vision caption failed:', e);
             }
         }
-        
+
         // Add trigger word if specified
         if (triggerWord) {
             finalText = `${triggerWord} ${finalText}`;
         }
-        
+
         return {
             startUrl,
             endUrl,
@@ -586,11 +1021,11 @@ async function generateSinglePair(prompt, index, total, aspectRatio, resolution,
 // Generate a single image - SINGLE MODE
 async function generateSingleItem(prompt, index, total, aspectRatio, resolution, useVision, llmModel, triggerWord) {
     addProgressLog(`🎨 [${index + 1}/${total}] Generating: ${truncate(prompt.prompt, 40)}...`, 'info');
-    
+
     try {
         const imageUrl = await generateSingleImage(prompt.prompt, aspectRatio, resolution);
         addProgressLog(`   [${index + 1}] Image done!`, 'info');
-        
+
         // Caption with vision
         let finalText = prompt.prompt;
         if (useVision) {
@@ -601,12 +1036,12 @@ async function generateSingleItem(prompt, index, total, aspectRatio, resolution,
                 console.warn('Vision caption failed:', e);
             }
         }
-        
+
         // Add trigger word if specified
         if (triggerWord) {
             finalText = `${triggerWord} ${finalText}`;
         }
-        
+
         return {
             imageUrl,
             prompt: prompt.prompt,
@@ -621,11 +1056,11 @@ async function generateSingleItem(prompt, index, total, aspectRatio, resolution,
 // Generate a reference variation - REFERENCE MODE
 async function generateReferenceItem(prompt, index, total, referenceUrl, aspectRatio, resolution, useVision, llmModel, triggerWord) {
     addProgressLog(`🎨 [${index + 1}/${total}] Variation: ${truncate(prompt.prompt, 40)}...`, 'info');
-    
+
     try {
         const imageUrl = await generateReferenceVariation(referenceUrl, prompt.prompt, aspectRatio, resolution);
         addProgressLog(`   [${index + 1}] Variation done!`, 'info');
-        
+
         // Caption with vision
         let finalText = prompt.prompt;
         if (useVision) {
@@ -636,12 +1071,12 @@ async function generateReferenceItem(prompt, index, total, referenceUrl, aspectR
                 console.warn('Vision caption failed:', e);
             }
         }
-        
+
         // Add trigger word if specified
         if (triggerWord) {
             finalText = `${triggerWord} ${finalText}`;
         }
-        
+
         return {
             imageUrl,
             prompt: prompt.prompt,
@@ -656,7 +1091,7 @@ async function generateReferenceItem(prompt, index, total, referenceUrl, aspectR
 async function startGeneration() {
     const numPairsInput = document.getElementById('numPairs');
     const numPairs = parseInt(numPairsInput.value) || 20;
-    
+
     // Strict validation - block if over 40
     if (numPairs > 40) {
         alert('⚠️ Maximum 40 pairs allowed!\n\nPlease enter a number between 1 and 40.\n\nIf you need more pairs, run multiple generations - they will accumulate in memory.');
@@ -664,7 +1099,7 @@ async function startGeneration() {
         numPairsInput.focus();
         return;
     }
-    
+
     const theme = document.getElementById('theme').value.trim();
     const transformation = document.getElementById('transformation').value.trim();
     const actionName = document.getElementById('actionName').value.trim();
@@ -674,28 +1109,36 @@ async function startGeneration() {
     const resolution = document.getElementById('resolution').value;
     const useVision = document.getElementById('useVisionCaption').checked;
     const llmModel = document.getElementById('llmModel').value;
-    
+
     // Validate based on mode
     if (!theme) {
         alert('Please fill in the dataset theme');
         return;
     }
-    
+
     if (state.mode === 'pair' && !transformation) {
         alert('Please fill in the transformation to learn');
         return;
     }
-    
+
     if (state.mode === 'reference' && !state.referenceImageBase64) {
         alert('Please upload a reference image');
         return;
     }
-    
-    if (!getApiKey()) {
+
+    // Validate model supports edit for pair/reference modes
+    const selectedModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    if ((state.mode === 'pair' || state.mode === 'reference') && selectedModel && !selectedModel.supportsEdit) {
+        alert(`⚠️ ${selectedModel.name} doesn't support image editing.\n\nPair mode and Reference mode require edit support.\nPlease select a different model (e.g., Nano Banana Pro) or switch to Single Image mode.`);
+        return;
+    }
+
+    const apiKey = await getApiKey();
+    if (!apiKey) {
         showApiKeyModal();
         return;
     }
-    
+
     // Confirm
     const imagesPerItem = state.mode === 'pair' ? 2 : 1;
     const cost = (numPairs * imagesPerItem * getImageCost() + 0.02).toFixed(2);
@@ -703,16 +1146,16 @@ async function startGeneration() {
     if (!confirm(`Generate ${numPairs} ${modeLabel}?\n\n⚡ ${maxConcurrent} parallel requests\n💰 Estimated cost: ~$${cost}\n\nImages stored in memory.\nUse "Download ZIP" to save.`)) {
         return;
     }
-    
+
     showProgress(true);
     clearProgressLog();
     updateProgress(0, numPairs, 'Generating prompts with AI...');
     addProgressLog('🤖 Generating creative prompts...', 'info');
-    
+
     state.isGenerating = true;
     let completed = 0;
     let failed = 0;
-    
+
     try {
         // Upload reference image if in reference mode
         let referenceUrl = null;
@@ -721,40 +1164,40 @@ async function startGeneration() {
             referenceUrl = await uploadReferenceImage();
             addProgressLog('✅ Reference uploaded', 'success');
         }
-        
+
         // Generate prompts
         const prompts = await generatePromptsWithLLM(theme, transformation, actionName, numPairs, llmModel);
         addProgressLog(`✅ Generated ${prompts.length} unique prompts`, 'success');
         addProgressLog(`⚡ Starting parallel generation (${maxConcurrent} at a time)...`, 'info');
-        
+
         // Process in batches of maxConcurrent
         for (let i = 0; i < prompts.length; i += maxConcurrent) {
             if (!state.isGenerating) break;
-            
+
             const batch = prompts.slice(i, Math.min(i + maxConcurrent, prompts.length));
-            
+
             // Run batch in parallel based on mode
             let results;
             if (state.mode === 'pair') {
                 results = await Promise.allSettled(
-                    batch.map((p, batchIndex) => 
+                    batch.map((p, batchIndex) =>
                         generateSinglePair(p, i + batchIndex, prompts.length, aspectRatio, resolution, useVision, llmModel, triggerWord)
                     )
                 );
             } else if (state.mode === 'single') {
                 results = await Promise.allSettled(
-                    batch.map((p, batchIndex) => 
+                    batch.map((p, batchIndex) =>
                         generateSingleItem(p, i + batchIndex, prompts.length, aspectRatio, resolution, useVision, llmModel, triggerWord)
                     )
                 );
             } else if (state.mode === 'reference') {
                 results = await Promise.allSettled(
-                    batch.map((p, batchIndex) => 
+                    batch.map((p, batchIndex) =>
                         generateReferenceItem(p, i + batchIndex, prompts.length, referenceUrl, aspectRatio, resolution, useVision, llmModel, triggerWord)
                     )
                 );
             }
-            
+
             // Process results
             for (let j = 0; j < results.length; j++) {
                 const result = results[j];
@@ -777,12 +1220,12 @@ async function startGeneration() {
                 updateProgress(completed + failed, prompts.length, `${completed}/${prompts.length} done`);
             }
         }
-        
+
         const failInfo = failed > 0 ? ` (${failed} failed)` : '';
         updateProgress(prompts.length, prompts.length, 'Complete!');
         addProgressLog(`🎉 Done! ${completed} ${modeLabel} generated${failInfo}`, 'success');
         addProgressLog(`📥 Click "Download ZIP" to save your dataset`, 'info');
-        
+
     } catch (error) {
         addProgressLog(`❌ Error: ${error.message}`, 'error');
         alert('Error: ' + error.message);
@@ -805,44 +1248,71 @@ async function downloadZIP() {
         alert('No images to download! Generate some first.');
         return;
     }
-    
+
     showLoading(true, 'Creating ZIP...');
-    
+
     try {
         // Dynamic import JSZip
         const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')).default;
         const zip = new JSZip();
-        
+
+        // Check if any items are from reference mode
+        const hasReferenceItems = state.pairs.some(item => item.mode === 'reference');
+
+        // If in reference mode, add the reference image first
+        if (hasReferenceItems && state.referenceImageBase64) {
+            try {
+                const response = await fetch(state.referenceImageBase64);
+                const referenceBlob = await response.blob();
+                zip.file('reference.png', referenceBlob);
+            } catch (error) {
+                console.error('Failed to add reference image to ZIP:', error);
+            }
+        }
+
         // Download and add each item
         for (let i = 0; i < state.pairs.length; i++) {
             const item = state.pairs[i];
-            
+
             if (item.mode === 'pair' || (item.startUrl && item.endUrl)) {
                 // Pair mode - two images
                 const startBlob = await fetch(item.startUrl).then(r => r.blob());
                 const endBlob = await fetch(item.endUrl).then(r => r.blob());
-                
+
                 zip.file(`${item.id}_start.png`, startBlob);
                 zip.file(`${item.id}_end.png`, endBlob);
-                zip.file(`${item.id}.txt`, item.text);
+
+                // Create caption text file (vision caption only, for LoRA training)
+                let textContent = item.text || '';
+                zip.file(`${item.id}.txt`, textContent);
+
+                // Also create separate prompt files for reference
+                zip.file(`${item.id}_start_prompt.txt`, item.startPrompt || '');
+                zip.file(`${item.id}_edit_prompt.txt`, item.endPrompt || '');
             } else {
                 // Single/Reference mode - one image
                 const imageBlob = await fetch(item.imageUrl).then(r => r.blob());
-                
+
                 zip.file(`${item.id}.png`, imageBlob);
-                zip.file(`${item.id}.txt`, item.text);
+
+                // Create caption text file (vision caption only, for LoRA training)
+                let textContent = item.text || '';
+                zip.file(`${item.id}.txt`, textContent);
+
+                // Also create separate prompt file for reference
+                zip.file(`${item.id}_prompt.txt`, item.prompt || '');
             }
         }
-        
+
         // Generate and download
         const content = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(content);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `nanobanana_dataset_${Date.now()}.zip`;
+        a.download = `lorafactory_dataset_${Date.now()}.zip`;
         a.click();
         URL.revokeObjectURL(url);
-        
+
     } catch (error) {
         alert('Error creating ZIP: ' + error.message);
     } finally {
@@ -853,7 +1323,7 @@ async function downloadZIP() {
 function clearResults() {
     if (state.pairs.length === 0) return;
     if (!confirm(`Clear all ${state.pairs.length} items from memory?`)) return;
-    
+
     state.pairs = [];
     state.pairCounter = 0;
     document.getElementById('results').innerHTML = '';
@@ -861,31 +1331,277 @@ function clearResults() {
 }
 
 // =============================================================================
+// Image Model Discovery (FAL API)
+// =============================================================================
+
+async function fetchModelsFromFAL() {
+    console.log('Fetching models from FAL.ai...');
+
+    // Try to fetch pricing, but continue even if it fails
+    let pricingData = {};
+
+    try {
+        const apiKey = await getApiKey();
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+
+        // Add API key if available (higher rate limits)
+        // Note: Try without auth first, as pricing endpoint may not require it
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        // Fetch pricing for our curated models
+        const pricingUrl = `https://api.fal.ai/v1/models/pricing?endpoint_ids=${CURATED_MODEL_IDS.join(',')}`;
+        console.log('Fetching pricing from:', pricingUrl);
+
+        const pricingResponse = await fetch(pricingUrl, { headers });
+
+        if (!pricingResponse.ok) {
+            console.warn(`Pricing API returned ${pricingResponse.status}, using fallback pricing`);
+        } else {
+            pricingData = await pricingResponse.json();
+            console.log('Pricing data received:', pricingData);
+        }
+    } catch (error) {
+        console.warn('Failed to fetch pricing, using fallback:', error);
+    }
+
+    // Build models list (with or without live pricing)
+    try {
+
+        // Build models list with live pricing
+        const models = [];
+
+        for (const modelId of CURATED_MODEL_IDS) {
+            const config = MODEL_CONFIG[modelId] || {};
+            const pricing = pricingData[modelId];
+
+            // Extract version - search entire modelId, not just last part
+            const versionMatch = modelId.match(/v(\d+(?:\.\d+)?)/i) ||
+                modelId.match(/(\d+)-flex/) || // flux-2-flex
+                modelId.match(/flux\/(\d+)/); // flux/2
+            let version = versionMatch ? versionMatch[1] : '1.0';
+
+            // Override with known versions
+            const versionMap = {
+                'fal-ai/nano-banana-pro': '1.0',
+                'fal-ai/flux-2-flex': '2.0',
+                'fal-ai/bytedance/seedream/v4.5/text-to-image': '4.5',
+                'fal-ai/flux/dev': '1.0',
+                'fal-ai/flux/schnell': '1.0',
+                'fal-ai/aura-flow': '0.3',
+                'fal-ai/recraft/v3/text-to-image': '3.0'
+            };
+
+            if (versionMap[modelId]) {
+                version = versionMap[modelId];
+            }
+
+            // Override with known names
+            const nameMap = {
+                'fal-ai/nano-banana-pro': 'Nano Banana Pro',
+                'fal-ai/flux-2-flex': 'Flux 2 Flex',
+                'fal-ai/bytedance/seedream/v4.5/text-to-image': 'Seedream',
+                'fal-ai/flux/dev': 'Flux Dev',
+                'fal-ai/flux/schnell': 'Flux Schnell',
+                'fal-ai/aura-flow': 'Aura Flow',
+                'fal-ai/recraft/v3/text-to-image': 'Recraft'
+            };
+
+            const name = nameMap[modelId] || modelId.split('/').pop();
+
+            // Fallback pricing (estimated as of Dec 2025)
+            const fallbackPricing = {
+                'fal-ai/nano-banana-pro': '$0.15/image',
+                'fal-ai/flux-2-flex': '$0.06/megapixel',
+                'fal-ai/bytedance/seedream/v4.5/text-to-image': '$0.04/image',
+                'fal-ai/flux/dev': '$0.025/megapixel',
+                'fal-ai/flux/schnell': '$0.003/megapixel',
+                'fal-ai/aura-flow': 'Free (beta)',
+                'fal-ai/recraft/v3/text-to-image': '$0.04/image'
+            };
+
+            // Format pricing
+            let pricingText = fallbackPricing[modelId] || 'Pricing unavailable';
+            if (pricing && pricing.unit_price !== undefined) {
+                const price = pricing.unit_price;
+                const unit = pricing.unit || 'image';
+
+                if (price === 0) {
+                    pricingText = 'Free';
+                } else {
+                    pricingText = `$${price.toFixed(4)}/${unit}`;
+                }
+            }
+
+            models.push({
+                id: modelId,
+                name: name,
+                version: version,
+                pricing: pricingText,
+                supportsEdit: config.supportsEdit || false,
+                editEndpoint: config.editEndpoint,
+                description: config.description || `${name} model`
+            });
+        }
+
+        if (models.length > 0) {
+            IMAGE_MODELS = models;
+            console.log('Models loaded successfully:', models.length);
+        } else {
+            throw new Error('No models were built');
+        }
+
+    } catch (error) {
+        console.error('Failed to build models list:', error);
+        console.log('Using comprehensive fallback models');
+
+        // Build fallback from MODEL_CONFIG
+        IMAGE_MODELS = CURATED_MODEL_IDS.map(modelId => {
+            const config = MODEL_CONFIG[modelId] || {};
+
+            const versionMap = {
+                'fal-ai/nano-banana-pro': '1.0',
+                'fal-ai/flux-2-flex': '2.0',
+                'fal-ai/bytedance/seedream/v4.5/text-to-image': '4.5',
+                'fal-ai/flux/dev': '1.0',
+                'fal-ai/flux/schnell': '1.0',
+                'fal-ai/aura-flow': '0.3',
+                'fal-ai/recraft/v3/text-to-image': '3.0'
+            };
+
+            const nameMap = {
+                'fal-ai/nano-banana-pro': 'Nano Banana Pro',
+                'fal-ai/flux-2-flex': 'Flux 2 Flex',
+                'fal-ai/bytedance/seedream/v4.5/text-to-image': 'Seedream',
+                'fal-ai/flux/dev': 'Flux Dev',
+                'fal-ai/flux/schnell': 'Flux Schnell',
+                'fal-ai/aura-flow': 'Aura Flow',
+                'fal-ai/recraft/v3/text-to-image': 'Recraft'
+            };
+
+            const fallbackPricing = {
+                'fal-ai/nano-banana-pro': '$0.15/image',
+                'fal-ai/flux-2-flex': '$0.06/megapixel',
+                'fal-ai/bytedance/seedream/v4.5/text-to-image': '$0.04/image',
+                'fal-ai/flux/dev': '$0.025/megapixel',
+                'fal-ai/flux/schnell': '$0.003/megapixel',
+                'fal-ai/aura-flow': 'Free (beta)',
+                'fal-ai/recraft/v3/text-to-image': '$0.04/image'
+            };
+
+            return {
+                id: modelId,
+                name: nameMap[modelId] || modelId.split('/').pop(),
+                version: versionMap[modelId] || '1.0',
+                pricing: fallbackPricing[modelId] || 'Contact FAL',
+                supportsEdit: config.supportsEdit || false,
+                editEndpoint: config.editEndpoint,
+                description: config.description || `${nameMap[modelId]} model`
+            };
+        });
+
+        console.log('Fallback models loaded:', IMAGE_MODELS.length);
+    }
+}
+
+// =============================================================================
+// Image Model Selection
+// =============================================================================
+
+function populateImageModels() {
+    const select = document.getElementById('imageModel');
+    const descElement = document.getElementById('imageModelDesc');
+
+    // Clear existing options
+    select.innerHTML = '';
+
+    // Add models
+    IMAGE_MODELS.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = `${model.name} v${model.version} - ${model.pricing}`;
+        if (!model.supportsEdit) {
+            option.textContent += ' (no edit)';
+        }
+        select.appendChild(option);
+    });
+
+    // Set default
+    select.value = state.imageModel;
+
+    // Update description on change
+    select.addEventListener('change', (e) => {
+        state.imageModel = e.target.value;
+        const selectedModel = IMAGE_MODELS.find(m => m.id === e.target.value);
+        if (selectedModel) {
+            descElement.textContent = `v${selectedModel.version} - ${selectedModel.description}`;
+
+            // Warn if model doesn't support edit and user is in pair/reference mode
+            if (!selectedModel.supportsEdit && (state.mode === 'pair' || state.mode === 'reference')) {
+                alert(`⚠️ ${selectedModel.name} v${selectedModel.version} doesn't support image editing.\n\nPair mode and Reference mode require edit support. Please select a different model or switch to Single Image mode.`);
+            }
+        }
+        updateCostEstimate();
+    });
+
+    // Set initial description
+    const initialModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    if (initialModel) {
+        descElement.textContent = `v${initialModel.version} - ${initialModel.description}`;
+    }
+}
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
-function init() {
+async function init() {
+    // Show security banner if not dismissed
+    const bannerDismissed = localStorage.getItem('security_banner_dismissed');
+    if (!bannerDismissed) {
+        const banner = document.getElementById('securityBanner');
+        if (banner) banner.style.display = 'flex';
+    }
+
+    // Fetch models from FAL API (with live pricing)
+    await fetchModelsFromFAL();
+
+    // Populate image models dropdown
+    populateImageModels();
+
     // Check for API key and configure FAL
-    const apiKey = getApiKey();
+    const apiKey = await getApiKey();
     if (apiKey) {
-        fal.config({ credentials: apiKey });
-        updateStatus(true, 'API Key Set');
+        // Initialize active provider
+        try {
+            await providerManager.getActive().setApiKey(apiKey);
+        } catch (e) {
+            console.error('Failed to configure provider:', e);
+        }
+
+        const settings = getSecuritySettings();
+        const encrypted = settings.useEncryption ? ' (encrypted)' : '';
+        updateStatus(true, `API Key Set${encrypted}`);
+        setupAutoClear();
     } else {
         updateStatus(false, 'Click 🔑 to add API key');
         setTimeout(() => showApiKeyModal(), 500);
     }
-    
+
     // Setup cost estimate
     document.getElementById('numPairs').addEventListener('input', updateCostEstimate);
     document.getElementById('useVisionCaption').addEventListener('change', updateCostEstimate);
     document.getElementById('resolution').addEventListener('change', updateCostEstimate);
     updateCostEstimate();
-    
+
     // Initialize mode
     setMode('pair');
-    
+
     updatePairCount();
-    
+
     // Setup drag and drop for reference image
     const uploadZone = document.getElementById('uploadZone');
     if (uploadZone) {
@@ -906,6 +1622,10 @@ function init() {
             }
         });
     }
+
+    // Reset auto-clear timer on user activity
+    document.addEventListener('click', resetAutoClearTimer);
+    document.addEventListener('keypress', resetAutoClearTimer);
 }
 
 // Export to global scope for onclick handlers
@@ -923,5 +1643,12 @@ window.toggleSystemPrompt = toggleSystemPrompt;
 window.resetSystemPrompt = resetSystemPrompt;
 window.handleReferenceUpload = handleReferenceUpload;
 window.clearReference = clearReference;
+window.showSecuritySettings = showSecuritySettings;
+window.hideSecuritySettings = hideSecuritySettings;
+window.saveSecuritySettings = saveSecuritySettings;
+window.dismissSecurityBanner = dismissSecurityBanner;
+window.copyPromptToClipboard = copyPromptToClipboard;
+window.togglePrompts = togglePrompts;
+window.addResultCard = addResultCard;
 
 document.addEventListener('DOMContentLoaded', init);

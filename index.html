@@ -1,23 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NanoBanana Pro LoRA Dataset Generator</title>
+    <title>LoRAFactory - Multi-Provider Dataset Generator</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Header -->
         <header class="header">
             <div class="logo">
-                <span class="logo-icon">🍌</span>
-                <h1>NanoBanana Pro LoRA Dataset Generator</h1>
+                <span class="logo-icon">🏭</span>
+                <h1>LoRAFactory - Dataset Generator</h1>
             </div>
             <div class="header-actions">
+                <button class="btn btn-icon" onclick="showSecuritySettings()" title="Security Settings">🛡️</button>
                 <button class="btn btn-icon" onclick="showApiKeyModal()" title="API Key Settings">🔑</button>
                 <div class="status-bar">
                     <span class="status-dot" id="statusDot"></span>
@@ -25,6 +30,19 @@
                 </div>
             </div>
         </header>
+
+        <!-- Security Warning Banner -->
+        <div id="securityBanner" class="security-banner" style="display: none;">
+            <div class="banner-content">
+                <span class="banner-icon">⚠️</span>
+                <div class="banner-text">
+                    <strong>Security Notice:</strong> Your API key is stored in your browser.
+                    For better security, click the 🛡️ button to enable encryption and session-only storage.
+                    <a href="#" onclick="showSecuritySettings(); return false;">Configure Security →</a>
+                </div>
+            </div>
+            <button class="banner-close" onclick="dismissSecurityBanner()" title="Dismiss">✕</button>
+        </div>
 
         <!-- Main Content -->
         <main class="main-content">
@@ -46,7 +64,7 @@
                 <!-- Settings Panel -->
                 <div class="panel">
                     <h2>⚙️ Settings</h2>
-                    
+
                     <div class="form-group">
                         <label>Aspect Ratio</label>
                         <select id="aspectRatio">
@@ -68,6 +86,14 @@
                     </div>
 
                     <div class="form-group">
+                        <label>Image Generation Model</label>
+                        <select id="imageModel">
+                            <!-- Populated dynamically on load -->
+                        </select>
+                        <small id="imageModelDesc">Loading models and live pricing from FAL.ai...</small>
+                    </div>
+
+                    <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="useVisionCaption" checked>
                             <span>Vision Captions</span>
@@ -78,11 +104,16 @@
                     <div class="form-group">
                         <label>LLM/Vision Model</label>
                         <select id="llmModel">
-                            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash (fast)</option>
-                            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
-                            <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                            <option value="openai/gpt-4o">GPT-4o</option>
+                            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash - $0.075/$0.30 per 1M tokens
+                            </option>
+                            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro - $1.25/$5.00 per 1M tokens</option>
+                            <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet - $3.00/$15.00 per 1M tokens
+                            </option>
+                            <option value="openai/gpt-4o">GPT-4o - $2.50/$10.00 per 1M tokens</option>
                         </select>
+                        <small>Used for prompt generation and vision captions. Prices: input/output per 1M tokens (as of
+                            Dec 2024, via OpenRouter). Note: Some models may have compatibility issues with vision - try
+                            GPT-4o if errors occur.</small>
                     </div>
                 </div>
             </aside>
@@ -92,9 +123,10 @@
                 <!-- Generation Panel -->
                 <div class="panel">
                     <h2>🎨 Generate Dataset</h2>
-                    
+
                     <div class="auto-intro">
-                        <p>🚀 <strong>Static version</strong>: Runs entirely in your browser! Just describe what you want, AI generates everything.</p>
+                        <p>🚀 <strong>Static version</strong>: Runs entirely in your browser! Just describe what you
+                            want, AI generates everything.</p>
                     </div>
 
                     <!-- Mode Selector -->
@@ -123,8 +155,10 @@
                     <div id="referenceUploadSection" class="form-group hidden">
                         <label>📷 Reference Image</label>
                         <div class="reference-upload">
-                            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('referenceInput').click()">
-                                <input type="file" id="referenceInput" accept="image/*" style="display:none" onchange="handleReferenceUpload(event)">
+                            <div class="upload-zone" id="uploadZone"
+                                onclick="document.getElementById('referenceInput').click()">
+                                <input type="file" id="referenceInput" accept="image/*" style="display:none"
+                                    onchange="handleReferenceUpload(event)">
                                 <div class="upload-placeholder" id="uploadPlaceholder">
                                     <span class="upload-icon">📤</span>
                                     <span>Click to upload or drag & drop</span>
@@ -132,30 +166,35 @@
                                 </div>
                                 <img id="referencePreview" class="reference-preview hidden" alt="Reference">
                             </div>
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="clearReference()" id="clearRefBtn" style="display:none">✕ Clear</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="clearReference()"
+                                id="clearRefBtn" style="display:none">✕ Clear</button>
                         </div>
                         <small>Upload an image to create variations based on it</small>
                     </div>
 
                     <div class="form-group">
                         <label>🎯 Dataset Theme</label>
-                        <input type="text" id="theme" placeholder="Ex: portraits of diverse people, landscape photography, cute animals...">
+                        <input type="text" id="theme"
+                            placeholder="Ex: portraits of diverse people, landscape photography, cute animals...">
                     </div>
-                    
+
                     <!-- Transformation (only for pair mode) -->
                     <div id="transformationSection" class="form-group">
                         <label>🔄 Transformation to Learn</label>
-                        <textarea id="transformation" rows="2" placeholder="Ex: progressively zoom out from close-up to full body shot, keeping the subject centered"></textarea>
+                        <textarea id="transformation" rows="2"
+                            placeholder="Ex: progressively zoom out from close-up to full body shot, keeping the subject centered"></textarea>
                     </div>
 
                     <!-- Action Name (only for pair mode) -->
                     <div id="actionNameSection" class="form-group">
                         <label>🏷️ Action Name <small style="opacity: 0.6">(optional - AI will generate)</small></label>
-                        <input type="text" id="actionName" placeholder="Leave empty for AI to generate, or: unzoom, zoom_out...">
+                        <input type="text" id="actionName"
+                            placeholder="Leave empty for AI to generate, or: unzoom, zoom_out...">
                     </div>
 
                     <div class="form-group">
-                        <label>✨ Trigger Word <small style="opacity: 0.6">(optional - prepended to .txt files)</small></label>
+                        <label>✨ Trigger Word <small style="opacity: 0.6">(optional - prepended to .txt
+                                files)</small></label>
                         <input type="text" id="triggerWord" placeholder="e.g., MYZOOM, MYSTYLE...">
                     </div>
 
@@ -163,9 +202,12 @@
                     <div class="form-group">
                         <label>🧠 Custom System Prompt</label>
                         <div id="systemPromptSection" class="collapsible-content">
-                            <textarea id="customSystemPrompt" rows="4" placeholder="Customize the AI prompt generation behavior..."></textarea>
-                            <small>Leave empty for default. This controls how the AI generates creative prompts for your dataset.</small>
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="resetSystemPrompt()" style="margin-top: 8px;">↻ Reset to Default</button>
+                            <textarea id="customSystemPrompt" rows="4"
+                                placeholder="Customize the AI prompt generation behavior..."></textarea>
+                            <small>Leave empty for default. This controls how the AI generates creative prompts for your
+                                dataset.</small>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="resetSystemPrompt()"
+                                style="margin-top: 8px;">↻ Reset to Default</button>
                         </div>
                     </div>
 
@@ -199,7 +241,8 @@
                             <div class="progress-fill" id="progressFill"></div>
                         </div>
                         <div class="progress-text">
-                            <span id="progressCurrent">0</span> / <span id="progressTotal">0</span> <span id="progressLabel">pairs</span>
+                            <span id="progressCurrent">0</span> / <span id="progressTotal">0</span> <span
+                                id="progressLabel">pairs</span>
                         </div>
                         <div class="progress-status" id="progressStatus">Initializing...</div>
                     </div>
@@ -209,7 +252,7 @@
                 <!-- Results Panel -->
                 <div class="panel results-panel">
                     <h2>🖼️ Results</h2>
-                    
+
                     <div id="loadingIndicator" class="loading hidden">
                         <div class="spinner"></div>
                         <span>Generating...</span>
@@ -224,19 +267,45 @@
         <div id="apiKeyModal" class="modal hidden">
             <div class="modal-content">
                 <h2>🔑 API Key Settings</h2>
-                <p class="modal-desc">Enter your FAL API key. Get one free at <a href="https://fal.ai/dashboard/keys" target="_blank">fal.ai/dashboard/keys</a></p>
-                
+                <p class="modal-desc">Enter your FAL API key. Get one free at <a href="https://fal.ai/dashboard/keys"
+                        target="_blank">fal.ai/dashboard/keys</a></p>
+
+                <!-- Security Warnings -->
+                <div class="security-notice">
+                    <div class="notice-item">⚠️ <strong>Security:</strong> Keys are stored in your browser</div>
+                    <div class="notice-item">🛡️ Enable encryption in Security Settings (🛡️ button) for better
+                        protection</div>
+                    <div class="notice-item">🚫 Never share your API key or use on untrusted devices</div>
+                </div>
+
                 <div class="form-group">
-                    <label>FAL API Key</label>
+                    <label>Provider</label>
+                    <select id="providerSelect"
+                        style="width: 100%; padding: 8px; margin-bottom: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-color);">
+                        <option value="fal">FAL.ai</option>
+                        <!-- Other providers will be added here -->
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label id="apiKeyLabel">FAL API Key</label>
                     <div class="api-key-input">
-                        <input type="password" id="apiKeyInput" placeholder="Enter your FAL API key...">
+                        <input type="password" id="apiKeyInput" placeholder="Enter your API key...">
                         <button class="btn btn-icon" onclick="toggleKeyVisibility()" title="Show/Hide">
                             <span id="keyVisibilityIcon">👁️</span>
                         </button>
                     </div>
-                    <small>Stored only in your browser. Never sent anywhere except FAL.</small>
+                    <small>Stored only in your browser. Never sent anywhere except the provider.</small>
                 </div>
-                
+
+                <!-- Encryption Password Field (shown when encryption is enabled) -->
+                <div id="encryptionPasswordSection" class="form-group hidden">
+                    <label>🔐 Encryption Password</label>
+                    <input type="password" id="encryptionPassword"
+                        placeholder="Enter password to encrypt your API key (min 8 characters)">
+                    <small>This password encrypts your API key. You'll need it each session.</small>
+                </div>
+
                 <div class="modal-actions">
                     <button class="btn btn-secondary" onclick="hideApiKeyModal()">Cancel</button>
                     <button class="btn btn-danger" onclick="clearApiKey()">Clear Key</button>
@@ -244,8 +313,64 @@
                 </div>
             </div>
         </div>
+
+        <!-- Security Settings Modal -->
+        <div id="securitySettingsModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>🛡️ Security Settings</h2>
+                <p class="modal-desc">Configure how your API key is stored and protected</p>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="useEncryption">
+                        <span>🔐 <strong>Encrypt API Key</strong></span>
+                    </label>
+                    <small>Encrypts your API key with a password using AES-256-GCM. You'll need to enter the password
+                        each time you open the app.</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="useSessionStorage">
+                        <span>⏱️ <strong>Session-Only Storage</strong></span>
+                    </label>
+                    <small>API key cleared when you close the browser tab. More secure for shared computers.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>⏰ Auto-Clear After Inactivity (minutes)</label>
+                    <input type="number" id="autoClockMinutes" min="0" max="120" placeholder="0 = disabled">
+                    <small>Automatically clear API key after specified minutes of inactivity. 0 = disabled.</small>
+                </div>
+
+                <div class="security-recommendations">
+                    <h3>📋 Security Best Practices:</h3>
+                    <ul>
+                        <li>✅ Use encryption if storing key persistently</li>
+                        <li>✅ Use session-only storage on shared computers</li>
+                        <li>✅ Enable auto-clear (15-30 min) for added security</li>
+                        <li>✅ Always use HTTPS when accessing this app</li>
+                        <li>✅ Clear browser data after use on public computers</li>
+                        <li>🚫 Never install untrusted browser extensions</li>
+                        <li>🚫 Never use on untrusted networks without VPN</li>
+                    </ul>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="hideSecuritySettings()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveSecuritySettings()">Save Settings</button>
+                </div>
+            </div>
+        </div>
     </div>
+
+
+    <footer class="app-footer" style="text-align: center; padding: 20px; opacity: 0.6; font-size: 0.9em;">
+        <p>Original by <a href="https://lovis.io" target="_blank"
+                style="color: inherit; text-decoration: underline;">Lovis.io</a> | Enhanced Version</p>
+    </footer>
 
     <script type="module" src="app.js"></script>
 </body>
+
 </html>
