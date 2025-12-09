@@ -50,6 +50,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Project-specific exclusions (none for dev-private branch)
+
 # OS generated files
 Thumbs.db
 ehthumbs.db
@@ -59,11 +61,3 @@ $RECYCLE.BIN/
 # Temporary files
 *.tmp
 *.temp
-
-# Project-specific exclusions
-CLAUDE.md
-CUSTOM_SYSTEM_PROMPT_LORA_PERSON.txt
-PROMPT_GENERATION_EXPLAINED.md
-SECURITY_ASSESSMENT.md
-SECURITY_IMPROVEMENTS.md
-
