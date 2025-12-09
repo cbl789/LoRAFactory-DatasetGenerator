@@ -69,7 +69,8 @@ export class FalProvider extends ApiProvider {
             prompt: prompt,
             aspect_ratio: aspectRatio,
             resolution: resolution,
-            num_images: 1
+            num_images: 1,
+            enable_safety_checker: false
         });
         return result.images[0].url;
     }
@@ -82,7 +83,8 @@ export class FalProvider extends ApiProvider {
             image_urls: [sourceUrl],
             prompt: prompt,
             aspect_ratio: 'auto',
-            resolution: resolution
+            resolution: resolution,
+            enable_safety_checker: false
         });
         return result.images[0].url;
     }
@@ -119,6 +121,127 @@ export class FalProvider extends ApiProvider {
 }
 
 // =============================================================================
+// Generic Provider (Configurable via JSON)
+// =============================================================================
+
+export class GenericProvider extends ApiProvider {
+    constructor(config) {
+        super({
+            id: config.id,
+            name: config.name,
+            capabilities: config.capabilities || ['text-to-image'] // Default capability
+        });
+        this.config = config;
+        this.apiKey = null;
+    }
+
+    async setApiKey(key) {
+        this.apiKey = key;
+    }
+
+    // JSON Path helper to extract value from response
+    _getValueByPath(obj, path) {
+        return path.split('.').reduce((o, i) => (o ? o[i] : null), obj);
+    }
+
+    // Template helper to replace {{key}} with values
+    _fillTemplate(templateStr, data) {
+        return templateStr.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+            return data[key] || '';
+        });
+    }
+
+    async _request(action, params) {
+        const actionConfig = this.config.endpoints?.[action];
+        if (!actionConfig) {
+            throw new Error(`Provider ${this.name} does not support ${action}`);
+        }
+
+        const url = actionConfig.url;
+        const method = actionConfig.method || 'POST';
+
+        // Prepare headers
+        const headers = {
+            'Content-Type': 'application/json',
+            ...actionConfig.headers
+        };
+
+        // Add Auth Header if configured
+        if (this.config.auth && this.apiKey) {
+            const authHeader = this.config.auth.header || 'Authorization';
+            const authPrefix = this.config.auth.prefix || 'Bearer ';
+            headers[authHeader] = `${authPrefix}${this.apiKey}`;
+        }
+
+        // Prepare body
+        let body = null;
+        if (actionConfig.body) {
+            // If body is a string template, parse it
+            const bodyStr = typeof actionConfig.body === 'string'
+                ? actionConfig.body
+                : JSON.stringify(actionConfig.body);
+
+            const filledBodyStr = this._fillTemplate(bodyStr, params);
+            body = filledBodyStr; // Send as string (it's JSON)
+        }
+
+        // Make Request
+        const response = await fetch(url, {
+            method,
+            headers,
+            body
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`${this.name} Error (${response.status}): ${text}`);
+        }
+
+        const data = await response.json();
+
+        // Extract result
+        if (actionConfig.responsePath) {
+            const result = this._getValueByPath(data, actionConfig.responsePath);
+            if (!result) throw new Error(`Could not find result at path '${actionConfig.responsePath}' in response`);
+            return result;
+        }
+
+        return data; // Return full data if no path specified
+    }
+
+    async generateImage(params) {
+        // params: { prompt, aspectRatio, resolution, model }
+        // Generic providers might rely on a template for "prompt"
+        return await this._request('generateImage', params);
+    }
+
+    // TODO: Implement edit, crypto, upload if configured
+    async editImage(params) {
+        // If config has 'editImage' endpoint, use it
+        if (this.config.endpoints?.editImage) {
+            return await this._request('editImage', params);
+        }
+        throw new Error(`${this.name} does not support image editing`);
+    }
+
+    async generatePrompts(params) {
+        // If config has 'generatePrompts' endpoint (LLM wrapper)
+        if (this.config.endpoints?.generatePrompts) {
+            // Expects JSON array in response
+            return await this._request('generatePrompts', params);
+        }
+        throw new Error(`${this.name} does not support prompt generation`);
+    }
+
+    async captionImage(params) {
+        if (this.config.endpoints?.captionImage) {
+            return await this._request('captionImage', params);
+        }
+        throw new Error(`${this.name} does not support image captioning`);
+    }
+}
+
+// =============================================================================
 // Provider Manager (Singleton)
 // =============================================================================
 
@@ -135,8 +258,18 @@ class ProviderManager {
         this.providers[provider.id] = provider;
     }
 
+    unregister(id) {
+        if (id !== 'fal') { // Prevent removing default
+            delete this.providers[id];
+        }
+    }
+
     get(id) {
         return this.providers[id];
+    }
+
+    getAll() {
+        return Object.values(this.providers);
     }
 
     getActive() {

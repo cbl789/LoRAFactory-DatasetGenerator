@@ -460,6 +460,8 @@ textarea {
     box-shadow: 0 4px 20px rgba(245, 213, 71, 0.3);
 }
 
+
+
 .btn-generate:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 30px rgba(245, 213, 71, 0.4);
@@ -1045,4 +1047,54 @@ textarea {
     .prompt-label {
         font-size: 0.8rem;
     }
+}
+
+/* Image Preview Modal */
+.image-preview-modal {
+    background: rgba(0, 0, 0, 0.95);
+    cursor: zoom-out;
+}
+
+.preview-content {
+    margin: auto;
+    display: block;
+    max-width: 80vw;
+    /* 80% viewport width */
+    max-height: 80vh;
+    /* 80% viewport height */
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    animation: zoom 0.3s;
+    object-fit: contain;
+}
+
+@keyframes zoom {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.close-preview {
+    position: absolute;
+    top: 20px;
+    right: 35px;
+    color: #f1f1f1;
+    font-size: 40px;
+    font-weight: bold;
+    transition: 0.3s;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+.close-preview:hover,
+.close-preview:focus {
+    color: var(--accent);
+    text-decoration: none;
+    cursor: pointer;
 }

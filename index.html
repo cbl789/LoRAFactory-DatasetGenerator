@@ -213,7 +213,7 @@
 
                     <div class="form-group">
                         <label>📊 Number of <span id="pairOrImageLabel">Pairs</span> (max 40)</label>
-                        <input type="number" id="numPairs" value="10" min="1" max="40">
+                        <input type="number" id="numPairs" value="20" min="1" max="40">
                         <small>Estimated cost: <span id="costEstimate">~$3.00</span></small>
                     </div>
 
@@ -280,11 +280,15 @@
 
                 <div class="form-group">
                     <label>Provider</label>
-                    <select id="providerSelect"
-                        style="width: 100%; padding: 8px; margin-bottom: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-color);">
-                        <option value="fal">FAL.ai</option>
-                        <!-- Other providers will be added here -->
-                    </select>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="providerSelect"
+                            style="flex-grow: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-color);">
+                            <option value="fal">FAL.ai</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="showAddProviderModal()" title="Add Custom Provider">
+                            ➕
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -313,6 +317,105 @@
                 </div>
             </div>
         </div>
+
+        <!-- Add Custom Provider Modal -->
+        <div id="addProviderModal" class="modal hidden">
+            <div class="modal-content" style="max-width: 600px;">
+                <h2>🔌 Add Custom Provider</h2>
+                <p class="modal-desc">Configure a REST API endpoint for image generation.</p>
+
+                <div class="form-group">
+                    <label>Provider Name</label>
+                    <input type="text" id="custProvName" placeholder="e.g. Local SD, OpenAI DALL-E">
+                </div>
+
+                <div class="form-group">
+                    <label>Unique ID</label>
+                    <input type="text" id="custProvId" placeholder="e.g. local-sd"
+                        oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '')">
+                </div>
+
+                <div class="form-group">
+                    <label>API Endpoint (POST)</label>
+                    <input type="text" id="custProvUrl" placeholder="https://api.example.com/v1/generate">
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Auth Header</label>
+                        <input type="text" id="custProvAuthHeader" value="Authorization" placeholder="Authorization">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Auth Prefix</label>
+                        <input type="text" id="custProvAuthPrefix" value="Bearer " placeholder="Bearer ">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Request Body Template (JSON)</label>
+                    <textarea id="custProvBody" rows="5" class="code-font"
+                        placeholder='{"prompt": "{{prompt}}", "aspect_ratio": "{{aspectRatio}}", "size": "1024x1024"}'></textarea>
+                    <small>Variables: <code>{{prompt}}</code>, <code>{{aspectRatio}}</code>,
+                        <code>{{resolution}}</code></small>
+                </div>
+
+                <div class="form-group">
+                    <label>Response JSON Path to Image URL</label>
+                    <input type="text" id="custProvResponsePath" value="images.0.url"
+                        placeholder="e.g. data.0.url or output.image">
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn-secondary"
+                        onclick="document.getElementById('addProviderModal').classList.add('hidden')">Cancel</button>
+                    <button class="btn btn-primary" onclick="handleSaveProvider()">Save Provider</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Helper script for saving provider -->
+        <script>
+            function showAddProviderModal() {
+                document.getElementById('apiKeyModal').classList.add('hidden');
+                document.getElementById('addProviderModal').classList.remove('hidden');
+            }
+
+            function handleSaveProvider() {
+                const config = {
+                    id: document.getElementById('custProvId').value,
+                    name: document.getElementById('custProvName').value,
+                    endpoints: {
+                        generateImage: {
+                            url: document.getElementById('custProvUrl').value,
+                            headers: {},
+                            body: document.getElementById('custProvBody').value, // Store as string template
+                            responsePath: document.getElementById('custProvResponsePath').value
+                        }
+                    },
+                    auth: {
+                        header: document.getElementById('custProvAuthHeader').value,
+                        prefix: document.getElementById('custProvAuthPrefix').value
+                    }
+                };
+
+                if (!config.id || !config.name || !config.endpoints.generateImage.url) {
+                    alert('Please fill in Name, ID, and URL');
+                    return;
+                }
+
+                // Call app.js exported function
+                if (window.addCustomProvider) {
+                    window.addCustomProvider(config);
+                    document.getElementById('addProviderModal').classList.add('hidden');
+                    // Re-open API modal to show new provider selected?
+                    // For now, confirm and let user reopen
+                    alert('Provider added! Select it from the list.');
+                    window.showApiKeyModal();
+                } else {
+                    alert('Error: addCustomProvider function not found');
+                }
+            }
+        </script>
 
         <!-- Security Settings Modal -->
         <div id="securitySettingsModal" class="modal hidden">
@@ -369,6 +472,12 @@
         <p>Original by <a href="https://lovis.io" target="_blank"
                 style="color: inherit; text-decoration: underline;">Lovis.io</a> | Enhanced Version</p>
     </footer>
+
+    <!-- Image Preview Modal -->
+    <div id="imagePreviewModal" class="modal image-preview-modal hidden" onclick="closeImagePreview()">
+        <span class="close-preview">&times;</span>
+        <img class="preview-content" id="previewImage" onclick="event.stopPropagation()">
+    </div>
 
     <script type="module" src="app.js"></script>
 </body>

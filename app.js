@@ -3,7 +3,61 @@
  * Uses Provider Pattern for Multi-Vendor Support
  */
 
-import { providerManager } from './api_providers.js';
+import { providerManager, GenericProvider } from './api_providers.js';
+
+// =============================================================================
+// Custom Provider Management
+// =============================================================================
+
+function getCustomProviders() {
+    const stored = localStorage.getItem('custom_providers');
+    return stored ? JSON.parse(stored) : [];
+}
+
+function saveCustomProviders(providers) {
+    localStorage.setItem('custom_providers', JSON.stringify(providers));
+    // Reload to register
+    loadCustomProviders();
+}
+
+function loadCustomProviders() {
+    const custom = getCustomProviders();
+    // Register each
+    custom.forEach(config => {
+        try {
+            const provider = new GenericProvider(config);
+            providerManager.register(provider);
+        } catch (e) {
+            console.error('Failed to register custom provider:', config, e);
+        }
+    });
+    // Refresh UI if modal is open
+    populateProviderDropdown();
+}
+
+function addCustomProvider(config) {
+    const providers = getCustomProviders();
+    // Check for duplicate ID
+    const existingIndex = providers.findIndex(p => p.id === config.id);
+    if (existingIndex >= 0) {
+        providers[existingIndex] = config; // Update
+    } else {
+        providers.push(config); // Add
+    }
+    saveCustomProviders(providers);
+}
+
+function deleteCustomProvider(id) {
+    const providers = getCustomProviders();
+    const filtered = providers.filter(p => p.id !== id);
+    saveCustomProviders(filtered);
+    providerManager.unregister(id);
+    // If active was deleted, switch to default
+    if (providerManager.activeProviderId === id) {
+        providerManager.setActive('fal');
+    }
+}
+
 
 // =============================================================================
 // State
@@ -304,8 +358,56 @@ function clearApiKeyFromMemory() {
     sessionStorage.removeItem('encryption_password');
 }
 
+// Populate the provider dropdown
+function populateProviderDropdown() {
+    const select = document.getElementById('providerSelect');
+    if (!select) return;
+
+    // Save current selection if possible
+    const current = providerManager.activeProviderId;
+
+    select.innerHTML = '';
+
+    // Get all providers
+    const allProviders = providerManager.getAll(); // Method we added to ProviderManager
+
+    // Sort: FAL first, then others alphabetically
+    allProviders.sort((a, b) => {
+        if (a.id === 'fal') return -1;
+        if (b.id === 'fal') return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    allProviders.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.name + (p.config ? ' (Custom)' : '');
+        select.appendChild(option);
+    });
+
+    // Restore selection or default to fal
+    select.value = current;
+
+    // Handle change immediately to update UI/Keys
+    select.onchange = async () => {
+        try {
+            providerManager.setActive(select.value);
+            // Reload key for this provider
+            const key = await getApiKey();
+            document.getElementById('apiKeyInput').value = key || '';
+
+            // Update UI description if possible
+            const label = document.getElementById('apiKeyLabel');
+            label.textContent = `${select.options[select.selectedIndex].text} API Key`;
+        } catch (e) {
+            console.error(e);
+        }
+    };
+}
+
 function showApiKeyModal() {
     document.getElementById('apiKeyModal').classList.remove('hidden');
+    populateProviderDropdown();
     loadApiKeyIntoModal();
 }
 
@@ -313,6 +415,11 @@ async function loadApiKeyIntoModal() {
     const input = document.getElementById('apiKeyInput');
     const passwordSection = document.getElementById('encryptionPasswordSection');
     const settings = getSecuritySettings();
+    const label = document.getElementById('apiKeyLabel');
+
+    // Update Label based on active provider
+    const active = providerManager.getActive();
+    label.textContent = `${active.name} API Key`;
 
     // Show/hide password field based on encryption setting
     if (settings.useEncryption) {
@@ -793,10 +900,19 @@ function clearProgressLog() {
     document.getElementById('progressLog').innerHTML = '';
 }
 
+function formatMetadataString(metadata) {
+    if (!metadata) return '';
+    return `\n\n--- [Generation Metadata] ---\nModel: ${metadata.model}\nResolution: ${metadata.resolution}\nAspect Ratio: ${metadata.aspectRatio}`;
+    // Scheduler/Steps currently default, omitted for brevity until they are variable
+}
+
 function addResultCard(item) {
     const container = document.getElementById('results');
     const card = document.createElement('div');
     card.className = 'result-card';
+
+    // Prepare metadata string
+    const metaStr = formatMetadataString(item.metadata);
 
     if (state.mode === 'pair') {
         // Pair mode - show START and END images
@@ -810,11 +926,11 @@ function addResultCard(item) {
             <div class="result-images">
                 <div class="result-image">
                     <span class="label">START</span>
-                    <img src="${item.startUrl}" alt="Start" loading="lazy">
+                    <img src="${item.startUrl}" alt="Start" loading="lazy" onclick="openImagePreview(this.src)" style="cursor: zoom-in">
                 </div>
                 <div class="result-image">
                     <span class="label">END</span>
-                    <img src="${item.endUrl}" alt="End" loading="lazy">
+                    <img src="${item.endUrl}" alt="End" loading="lazy" onclick="openImagePreview(this.src)" style="cursor: zoom-in">
                 </div>
             </div>
             <div class="result-prompts collapsed" id="prompts-${item.id}">
@@ -824,7 +940,7 @@ function addResultCard(item) {
                         <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'start')" title="Copy to clipboard">📋</button>
                     </div>
                     <div class="prompt-content">
-                        <div class="prompt-text" id="prompt-${item.id}-start">${escapeHtml(item.startPrompt || '')}</div>
+                        <div class="prompt-text" id="prompt-${item.id}-start">${escapeHtml((item.startPrompt || '') + metaStr)}</div>
                     </div>
                 </div>
                 <div class="prompt-section" id="section-${item.id}-edit">
@@ -833,7 +949,7 @@ function addResultCard(item) {
                         <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'edit')" title="Copy to clipboard">📋</button>
                     </div>
                     <div class="prompt-content">
-                        <div class="prompt-text" id="prompt-${item.id}-edit">${escapeHtml(item.endPrompt || '')}</div>
+                        <div class="prompt-text" id="prompt-${item.id}-edit">${escapeHtml((item.endPrompt || '') + metaStr)}</div>
                     </div>
                 </div>
                 ${item.text ? `
@@ -860,7 +976,7 @@ function addResultCard(item) {
             </div>
             <div class="result-images single">
                 <div class="result-image">
-                    <img src="${item.imageUrl}" alt="Generated" loading="lazy">
+                    <img src="${item.imageUrl}" alt="Result" loading="lazy" onclick="openImagePreview(this.src)" style="cursor: zoom-in">
                 </div>
             </div>
             <div class="result-prompts collapsed" id="prompts-${item.id}">
@@ -870,7 +986,7 @@ function addResultCard(item) {
                         <button class="btn-copy-prompt" onclick="event.stopPropagation(); copyPromptToClipboard('${item.id}', 'prompt')" title="Copy to clipboard">📋</button>
                     </div>
                     <div class="prompt-content">
-                        <div class="prompt-text" id="prompt-${item.id}-prompt">${escapeHtml(item.prompt || '')}</div>
+                        <div class="prompt-text" id="prompt-${item.id}-prompt">${escapeHtml((item.prompt || '') + metaStr)}</div>
                     </div>
                 </div>
                 ${item.text && item.text !== item.prompt ? `
@@ -927,41 +1043,63 @@ function togglePrompts(itemId) {
 
 // Copy prompt to clipboard
 async function copyPromptToClipboard(itemId, promptType) {
-    const element = document.getElementById(`prompt-${itemId}-${promptType}`);
-    if (!element) return;
+    const elementId = `prompt-${itemId}-${promptType}`;
+    const element = document.getElementById(elementId);
+
+    if (!element) {
+        console.error('Element not found:', elementId);
+        return;
+    }
 
     const text = element.textContent;
 
     try {
-        await navigator.clipboard.writeText(text);
-        // Visual feedback
-        const button = element.parentElement.querySelector('.btn-copy-prompt');
-        const originalText = button.textContent;
-        button.textContent = '✅';
-        setTimeout(() => {
-            button.textContent = originalText;
-        }, 2000);
-    } catch (err) {
-        console.error('Failed to copy:', err);
-        // Fallback for older browsers
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            const button = element.parentElement.querySelector('.btn-copy-prompt');
-            const originalText = button.textContent;
-            button.textContent = '✅';
-            setTimeout(() => {
-                button.textContent = originalText;
-            }, 2000);
-        } catch (err2) {
-            alert('Failed to copy to clipboard');
+        // Try modern API first
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            throw new Error('Clipboard API unavailable');
         }
-        document.body.removeChild(textarea);
+
+        showCopyFeedback(itemId, promptType);
+    } catch (err) {
+        // Fallback: Create hidden textarea
+        console.log('Clipboard API failed, using fallback:', err);
+        try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            textarea.style.top = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            if (successful) {
+                showCopyFeedback(itemId, promptType);
+            } else {
+                throw new Error('execCommand failed');
+            }
+        } catch (fallbackErr) {
+            console.error('Copy failed:', fallbackErr);
+            alert('Failed to copy. Please manually select and copy text.');
+        }
+    }
+}
+
+function showCopyFeedback(itemId, promptType) {
+    const sectionId = `section-${itemId}-${promptType}`;
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    const btn = section.querySelector('.btn-copy-prompt');
+    if (btn) {
+        const original = btn.textContent;
+        btn.textContent = '✅';
+        setTimeout(() => btn.textContent = original, 2000);
     }
 }
 
@@ -973,6 +1111,17 @@ function truncate(str, length) {
 // =============================================================================
 // Main Generation Function
 // =============================================================================
+
+// Helper to capture metadata
+function getGenMetadata() {
+    return {
+        model: state.imageModel,
+        resolution: document.getElementById('resolution').value,
+        aspectRatio: document.getElementById('aspectRatio').value,
+        scheduler: "Default",
+        steps: "Default"
+    };
+}
 
 // Generate a single pair (used for parallel execution) - PAIR MODE
 async function generateSinglePair(prompt, index, total, aspectRatio, resolution, useVision, llmModel, triggerWord) {
@@ -1010,7 +1159,8 @@ async function generateSinglePair(prompt, index, total, aspectRatio, resolution,
             startPrompt: prompt.base_prompt,
             endPrompt: prompt.edit_prompt,
             actionName: prompt.action_name,
-            text: finalText
+            text: finalText,
+            metadata: getGenMetadata() // Capture settings
         };
     } catch (error) {
         console.error(`Pair ${index + 1} error:`, error);
@@ -1045,7 +1195,8 @@ async function generateSingleItem(prompt, index, total, aspectRatio, resolution,
         return {
             imageUrl,
             prompt: prompt.prompt,
-            text: finalText
+            text: finalText,
+            metadata: getGenMetadata() // Capture settings
         };
     } catch (error) {
         console.error(`Image ${index + 1} error:`, error);
@@ -1080,7 +1231,8 @@ async function generateReferenceItem(prompt, index, total, referenceUrl, aspectR
         return {
             imageUrl,
             prompt: prompt.prompt,
-            text: finalText
+            text: finalText,
+            metadata: getGenMetadata() // Capture settings
         };
     } catch (error) {
         console.error(`Variation ${index + 1} error:`, error);
@@ -1096,7 +1248,6 @@ async function startGeneration() {
     if (numPairs > 40) {
         alert('⚠️ Maximum 40 pairs allowed!\n\nPlease enter a number between 1 and 40.\n\nIf you need more pairs, run multiple generations - they will accumulate in memory.');
         numPairsInput.value = 40;
-        numPairsInput.focus();
         return;
     }
 
@@ -1104,7 +1255,16 @@ async function startGeneration() {
     const transformation = document.getElementById('transformation').value.trim();
     const actionName = document.getElementById('actionName').value.trim();
     const triggerWord = document.getElementById('triggerWord').value.trim();
-    const maxConcurrent = parseInt(document.getElementById('maxConcurrent')?.value) || 3;
+    let maxConcurrent = parseInt(document.getElementById('maxConcurrent')?.value) || 3;
+
+    // Ensure parallel requests do not exceed image count
+    if (maxConcurrent > numPairs) {
+        console.log(`Capping parallel requests (${maxConcurrent}) to match image count (${numPairs})`);
+        maxConcurrent = numPairs;
+        // Optional: Update UI to reflect this
+        const concurrentInput = document.getElementById('maxConcurrent');
+        if (concurrentInput) concurrentInput.value = maxConcurrent;
+    }
     const aspectRatio = document.getElementById('aspectRatio').value;
     const resolution = document.getElementById('resolution').value;
     const useVision = document.getElementById('useVisionCaption').checked;
@@ -1284,23 +1444,31 @@ async function downloadZIP() {
 
                 // Create caption text file (vision caption only, for LoRA training)
                 let textContent = item.text || '';
+                // Note: Metadata usually NOT added to caption file for training pair purity, 
+                // but can be added if desired. For now, we only add to prompt files.
                 zip.file(`${item.id}.txt`, textContent);
 
+                // Create metadata string
+                const metaStr = formatMetadataString(item.metadata);
+
                 // Also create separate prompt files for reference
-                zip.file(`${item.id}_start_prompt.txt`, item.startPrompt || '');
-                zip.file(`${item.id}_edit_prompt.txt`, item.endPrompt || '');
+                zip.file(`${item.id}_start_prompt.txt`, (item.startPrompt || '') + metaStr);
+                zip.file(`${item.id}_edit_prompt.txt`, (item.endPrompt || '') + metaStr);
             } else {
                 // Single/Reference mode - one image
                 const imageBlob = await fetch(item.imageUrl).then(r => r.blob());
 
                 zip.file(`${item.id}.png`, imageBlob);
 
-                // Create caption text file (vision caption only, for LoRA training)
+                // Create metadata string
+                const metaStr = formatMetadataString(item.metadata);
+
+                // Create caption text file
                 let textContent = item.text || '';
                 zip.file(`${item.id}.txt`, textContent);
 
-                // Also create separate prompt file for reference
-                zip.file(`${item.id}_prompt.txt`, item.prompt || '');
+                // Also create separate prompt file for reference with metadata
+                zip.file(`${item.id}_prompt.txt`, (item.prompt || '') + metaStr);
             }
         }
 
@@ -1555,6 +1723,40 @@ function populateImageModels() {
 }
 
 // =============================================================================
+// Image Preview
+// =============================================================================
+
+function openImagePreview(url) {
+    const modal = document.getElementById('imagePreviewModal');
+    const img = document.getElementById('previewImage');
+    modal.classList.remove('hidden');
+    img.src = url;
+    document.body.style.overflow = 'hidden'; // Prevent scrolling
+}
+
+function closeImagePreview() {
+    const modal = document.getElementById('imagePreviewModal');
+    modal.classList.add('hidden');
+    document.getElementById('previewImage').src = '';
+    document.body.style.overflow = ''; // Restore scrolling
+}
+
+// Global Event Listeners for Preview
+document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('imagePreviewModal');
+    if (!modal.classList.contains('hidden')) {
+        if (e.key === 'Escape' || e.key === ' ') {
+            e.preventDefault(); // Prevent scrolling on space
+            closeImagePreview();
+        }
+    }
+});
+
+// Expose for onclick
+window.openImagePreview = openImagePreview;
+window.closeImagePreview = closeImagePreview;
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
@@ -1632,23 +1834,30 @@ async function init() {
 window.showApiKeyModal = showApiKeyModal;
 window.hideApiKeyModal = hideApiKeyModal;
 window.toggleKeyVisibility = toggleKeyVisibility;
-window.saveApiKey = saveApiKey;
-window.clearApiKey = clearApiKey;
 window.startGeneration = startGeneration;
 window.stopGeneration = stopGeneration;
 window.downloadZIP = downloadZIP;
-window.clearResults = clearResults;
+window.clearResults = clearResults; // Expose for UI
 window.setMode = setMode;
-window.toggleSystemPrompt = toggleSystemPrompt;
-window.resetSystemPrompt = resetSystemPrompt;
-window.handleReferenceUpload = handleReferenceUpload;
-window.clearReference = clearReference;
+window.showApiKeyModal = showApiKeyModal;
+window.hideApiKeyModal = hideApiKeyModal;
+window.saveApiKey = saveApiKey;
+window.clearApiKey = clearApiKey;
+window.toggleKeyVisibility = toggleKeyVisibility;
 window.showSecuritySettings = showSecuritySettings;
 window.hideSecuritySettings = hideSecuritySettings;
 window.saveSecuritySettings = saveSecuritySettings;
 window.dismissSecurityBanner = dismissSecurityBanner;
+window.toggleSystemPrompt = toggleSystemPrompt;
+window.resetSystemPrompt = resetSystemPrompt;
+window.handleReferenceUpload = handleReferenceUpload;
+window.clearReference = clearReference;
 window.copyPromptToClipboard = copyPromptToClipboard;
 window.togglePrompts = togglePrompts;
 window.addResultCard = addResultCard;
+
+// Custom Provider Exports
+window.addCustomProvider = addCustomProvider;
+window.deleteCustomProvider = deleteCustomProvider;
 
 document.addEventListener('DOMContentLoaded', init);
