@@ -61,3 +61,6 @@ $RECYCLE.BIN/
 # Temporary files
 *.tmp
 *.temp
+
+# My Documentation
+/docs
