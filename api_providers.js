@@ -242,6 +242,154 @@ export class GenericProvider extends ApiProvider {
 }
 
 // =============================================================================
+// Kie.ai Provider
+// =============================================================================
+
+export class KieProvider extends ApiProvider {
+    constructor() {
+        super({
+            id: 'kie',
+            name: 'Kie.ai',
+            capabilities: ['text-to-image', 'image-to-image']
+        });
+        this.apiKey = null;
+        this.baseUrl = 'https://api.kie.ai';
+    }
+
+    async setApiKey(key) {
+        this.apiKey = key;
+    }
+
+    async uploadImage(blob) {
+        // Kie.ai uses a different domain for file uploads
+        const formData = new FormData();
+        formData.append('file', blob, 'reference.png');
+        formData.append('uploadPath', 'lorafactory');
+        formData.append('fileName', `ref_${Date.now()}.png`);
+
+        const response = await fetch('https://kieai.redpandaai.co/api/file-stream-upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Kie.ai upload failed (${response.status}): ${error}`);
+        }
+
+        const data = await response.json();
+        // Response should contain the file URL
+        return data.url || data.fileUrl || data.downloadUrl || data.data?.url;
+    }
+
+    async _createTask(model, input) {
+        const response = await fetch(`${this.baseUrl}/api/v1/jobs/createTask`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: JSON.stringify({
+                model: model,
+                input: input
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Kie.ai createTask failed (${response.status}): ${error}`);
+        }
+
+        const data = await response.json();
+        return data.taskId || data.data?.taskId;
+    }
+
+    async _pollTaskResult(taskId, maxAttempts = 60, intervalMs = 2000) {
+        for (let i = 0; i < maxAttempts; i++) {
+            const response = await fetch(`${this.baseUrl}/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Kie.ai recordInfo failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const status = result.status || result.data?.status;
+
+            if (status === 'SUCCESS' || status === 'COMPLETED') {
+                return result.data || result;
+            } else if (status === 'FAILED' || status === 'ERROR') {
+                throw new Error(`Task failed: ${result.error || result.message || 'Unknown error'}`);
+            }
+
+            // Still processing, wait and retry
+            await new Promise(resolve => setTimeout(resolve, intervalMs));
+        }
+
+        throw new Error('Task timeout: exceeded maximum polling attempts');
+    }
+
+    async generateImage({ prompt, aspectRatio, resolution, model }) {
+        const quality = resolution === '4K' ? 'high' : 'basic';
+
+        const taskId = await this._createTask('seedream/4.5-text-to-image', {
+            prompt: prompt,
+            aspect_ratio: aspectRatio,
+            quality: quality
+        });
+
+        const result = await this._pollTaskResult(taskId);
+
+        // Extract image URL from result
+        if (result.outputMediaUrls && result.outputMediaUrls.length > 0) {
+            return result.outputMediaUrls[0].mediaUrl;
+        } else if (result.output && result.output.length > 0) {
+            return result.output[0];
+        }
+
+        throw new Error('No image URL in response');
+    }
+
+    async editImage({ sourceUrl, prompt, resolution, model, editEndpoint }) {
+        const quality = resolution === '4K' ? 'high' : 'basic';
+
+        const taskId = await this._createTask('seedream/4.5-edit', {
+            prompt: prompt,
+            image_urls: [sourceUrl],
+            aspect_ratio: 'auto', // Preserve source aspect ratio
+            quality: quality
+        });
+
+        const result = await this._pollTaskResult(taskId);
+
+        // Extract image URL from result
+        if (result.outputMediaUrls && result.outputMediaUrls.length > 0) {
+            return result.outputMediaUrls[0].mediaUrl;
+        } else if (result.output && result.output.length > 0) {
+            return result.output[0];
+        }
+
+        throw new Error('No image URL in response');
+    }
+
+    // Kie.ai doesn't support LLM/vision, so throw errors
+    async generatePrompts(params) {
+        throw new Error('Kie.ai does not support prompt generation. Use FAL.ai for LLM features.');
+    }
+
+    async captionImage(params) {
+        throw new Error('Kie.ai does not support image captioning. Use FAL.ai for vision features.');
+    }
+}
+
+// =============================================================================
 // Provider Manager (Singleton)
 // =============================================================================
 
@@ -250,8 +398,9 @@ class ProviderManager {
         this.providers = {};
         this.activeProviderId = 'fal'; // Default
 
-        // Register default provider
+        // Register default providers
         this.register(new FalProvider());
+        this.register(new KieProvider());
     }
 
     register(provider) {

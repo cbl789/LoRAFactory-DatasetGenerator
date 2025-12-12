@@ -105,18 +105,19 @@ npx serve .
 ## 🔑 API Keys
 
 1. Click the 🔑 button in the app
-2. Select your provider (FAL.ai, OpenAI, etc.)
+2. Select your provider (FAL.ai, Kie.ai, or custom)
 3. Enter your API key and save
 
 **Get API Keys**:
 - **FAL.ai**: [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)
-- **OpenAI**: Coming soon
-- **Replicate**: Coming soon
+- **Kie.ai**: [kie.ai](https://kie.ai) - 19% cheaper than official Seedream pricing
+- **Custom**: Add any REST API provider via UI
 
 **Security**: Your keys are stored ONLY in your browser's localStorage. They're never sent anywhere except directly to the selected provider's servers.
 
-## 💰 Pricing (FAL.ai)
+## 💰 Pricing
 
+### FAL.ai
 | Resolution | Cost per image |
 |------------|----------------|
 | 1K | $0.15 |
@@ -128,6 +129,18 @@ Vision captions: ~$0.002 per image
 **Examples**:
 - Pair Mode: 20 pairs × 2 images × $0.15 = ~$6.00
 - Single/Reference Mode: 20 images × $0.15 = ~$3.00
+
+### Kie.ai (Seedream 4.5)
+| Quality | Cost per image |
+|---------|----------------|
+| Basic (2K) | 6.5 credits ≈ $0.032 |
+| High (4K) | 6.5 credits ≈ $0.032 |
+
+**Examples**:
+- Pair Mode: 20 pairs × 2 images × $0.032 = ~$1.28
+- Single/Reference Mode: 20 images × $0.032 = ~$0.64
+
+**Note**: Kie.ai is ~80% cheaper than FAL.ai! LLM/Vision features still require FAL.ai.
 
 ## 📦 Output Format
 
