@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoRAFactory - Chat</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🏭</span>
+                <h1>LoRAFactory - Chat</h1>
+            </div>
+            <div class="header-actions">
+                <a class="btn btn-icon" href="index.html" title="Back to Generator">⬅️</a>
+                <div class="status-bar">
+                    <span class="status-dot" id="chatStatusDot"></span>
+                    <span id="chatStatusText">Checking...</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="chat-page">
+            <section class="chat-sidebar">
+                <div class="panel">
+                    <h2>⚙️ Chat Settings</h2>
+
+                    <div class="form-group">
+                        <label>Provider</label>
+                        <select id="providerSelectChat"></select>
+                        <small>Uses the same provider as the main page (persisted)</small>
+                    </div>
+                </div>
+
+                <div id="modelParametersPanel" class="panel model-config-panel">
+                    <div class="model-config-header">
+                        <div class="model-config-title">
+                            <h3>🎛️ Model Parameters</h3>
+                            <p class="model-config-subtitle">Optional advanced parameters</p>
+                        </div>
+                        <button class="btn-icon btn-sm" id="modelConfigToggle" title="Toggle configuration">▼</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Image Model</label>
+                        <select id="imageModel"></select>
+                        <small id="imageModelDesc">Select a model</small>
+                    </div>
+
+                    <div id="modelConfigContent" class="model-config-content">
+                        <div id="dynamicParametersSection" class="dynamic-parameters-section"></div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2>📷 Reference Image (optional)</h2>
+
+                    <div class="reference-upload">
+                        <div class="upload-zone" id="chatUploadZone">
+                            <input type="file" id="referenceInput" accept="image/*" style="display:none">
+                            <div class="upload-placeholder" id="chatUploadPlaceholder">
+                                <span class="upload-icon">📤</span>
+                                <span>Click to upload</span>
+                                <small>Used as input image for editing</small>
+                            </div>
+                            <img id="referencePreview" class="reference-preview hidden" alt="Reference">
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="clearRefBtn" style="display:none">✕ Clear</button>
+                    </div>
+
+                    <small>If provided, the chat will call image edit (reference → output).</small>
+                </div>
+
+                <div id="chatKeyNotice" class="panel hidden">
+                    <h2>🔑 API Key Required</h2>
+                    <p style="opacity: 0.9; margin-top: 8px;">
+                        No API key found for this session.
+                    </p>
+                    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                        <a class="btn btn-primary" href="index.html">Open Generator to set API key</a>
+                    </div>
+                </div>
+            </section>
+
+            <section class="chat-workspace">
+                <div class="panel chat-panel">
+                    <h2>💬 Chat</h2>
+                    <div id="chatMessages" class="chat-messages"></div>
+
+                    <div class="chat-input-row">
+                        <textarea id="chatInput" rows="2" placeholder="Tell the model what to generate or how to edit the reference image..."></textarea>
+                        <button id="sendBtn" class="btn btn-primary">Send</button>
+                    </div>
+                    <small>By default: generates an image. If reference image is uploaded: edits the reference.</small>
+                </div>
+            </section>
+
+            <section class="chat-api">
+                <div class="panel api-panel">
+                    <div class="api-panel-header">
+                        <h2>📡 API Stream</h2>
+                        <div class="api-panel-controls">
+                            <label class="api-mode-label" for="apiLogMode">Mode</label>
+                            <select id="apiLogMode" class="api-mode-select" title="Log mode">
+                                <option value="summary">Summary</option>
+                                <option value="verbose">Verbose</option>
+                            </select>
+                            <button id="clearApiLog" class="btn btn-secondary btn-sm" type="button">Clear</button>
+                        </div>
+                    </div>
+                    <pre id="apiLog" class="api-log" aria-label="API communication log"></pre>
+                    <small>Shows provider calls (request/response/error) for debugging.</small>
+                </div>
+            </section>
+        </main>
+
+        <div id="imagePreviewModal" class="modal image-preview-modal hidden" onclick="closeImagePreview()">
+            <span class="close-preview">&times;</span>
+            <img class="preview-content" id="previewImage" onclick="event.stopPropagation()">
+        </div>
+    </div>
+
+    <script type="module" src="chat.js"></script>
+</body>
+
+</html>

@@ -83,6 +83,11 @@ const state = {
     imageModel: 'fal-ai/nano-banana-pro' // Selected image generation model
 };
 
+try {
+    const savedModel = localStorage.getItem('selected_image_model');
+    if (savedModel) state.imageModel = savedModel;
+} catch (e) {}
+
 // Default system prompts for each mode
 const DEFAULT_SYSTEM_PROMPTS = {
     pair: `You are a creative prompt engineer for AI image generation. Generate diverse, detailed prompts for creating training data.
@@ -402,8 +407,16 @@ function populateProviderDropdown() {
     select.onchange = async () => {
         try {
             providerManager.setActive(select.value);
+            try {
+                localStorage.setItem('active_provider_id', select.value);
+            } catch (e) {}
             // Reload key for this provider
             const key = await getApiKey();
+            try {
+                await providerManager.getActive().setApiKey(key);
+            } catch (e) {
+                console.error('Failed to configure provider with API key:', e);
+            }
             document.getElementById('apiKeyInput').value = key || '';
 
             // Update UI description if possible
@@ -2112,6 +2125,9 @@ function populateImageModels() {
     const handleModelChange = async (e) => {
         const newModelId = e.target.value;
         state.imageModel = newModelId;
+        try {
+            localStorage.setItem('selected_image_model', newModelId);
+        } catch (e) {}
         
         const selectedModel = IMAGE_MODELS.find(m => m.id === newModelId);
         if (selectedModel) {
@@ -2210,6 +2226,17 @@ window.closeImagePreview = closeImagePreview;
 // =============================================================================
 
 async function init() {
+    // Register custom providers first so persisted selection can be restored
+    loadCustomProviders();
+
+    // Restore previously selected provider if available
+    try {
+        const savedProvider = localStorage.getItem('active_provider_id');
+        if (savedProvider) {
+            providerManager.setActive(savedProvider);
+        }
+    } catch (e) {}
+
     // Show security banner if not dismissed
     const bannerDismissed = localStorage.getItem('security_banner_dismissed');
     if (!bannerDismissed) {

@@ -8,7 +8,7 @@
 
 ## ✨ What's New in LoRAFactory
 
-**9 major enhancements over the original**:
+**10 major enhancements over the original**:
 
 - **🔌 Multi-Provider Support** - Extensible architecture for FAL.ai, OpenAI, Replicate, and more
 - **🔐 AES-256 Encryption** - Military-grade API key encryption with password protection
@@ -19,6 +19,7 @@
 - **⚙️ Security Settings** - Session-only storage, auto-clear timer, encryption options
 - **🎛️ Dynamic Model Parameters** - Schema-driven UI that adapts to each model's requirements automatically
 - **💾 Custom Prompt Management** - Save, load, export, and import custom system prompts with persistence
+- **💬 Chat Interface + API Stream** - Dedicated chat page for prompt-to-image / reference image editing with a live provider call log
 
 **All original features** (3 modes, vision captions, parallel generation, etc.) from [NanoBanana](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io are preserved.
 
@@ -46,6 +47,7 @@
 - **Vision captions** - AI-powered image descriptions with multiple LLM options
 - **Trigger word support** - Add custom prefixes to your training data
 - **🔐 Security Features** - API key encryption, session-only storage, auto-clear timer
+- **💬 Chat Interface** - Chat-style prompt-to-image and reference-image editing page with a live API stream for debugging
 
 ## 🎯 Generation Modes
 
@@ -74,6 +76,8 @@ Upload a reference image and generate variations.
 ```
 Automatically starts server and opens browser! Press Ctrl+C to stop.
 
+The chat page is available at `chat.html` (or via the 💬 button in the main header).
+
 To stop the server manually:
 ```bash
 ./stop.sh
@@ -99,7 +103,9 @@ npx serve .
 
 ```
 ├── index.html         # Main page
+├── chat.html          # Chat interface
 ├── app.js             # Application logic
+├── chat.js            # Chat page logic
 ├── api_providers.js   # Provider abstraction layer (NEW!)
 ├── style.css          # Styling
 └── README.md          # This file

@@ -1,7 +1,7 @@
 # LoRAFactory - Complete Feature List
 
 ## Summary
-LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io with **9 major new features** plus architectural improvements.
+LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io with **10 major new features** plus architectural improvements.
 
 ---
 
@@ -136,6 +136,18 @@ LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://g
 
 ---
 
+### 10. **Chat Interface + API Stream** 💬📡
+**NEW FILES**: `chat.html`, `chat.js`
+
+**What it does**:
+- Adds a dedicated chat page for prompt-to-image and reference-image editing
+- Includes an **API Stream** panel that logs provider calls (request/response/error) live
+- Supports **Summary** and **Verbose** logging modes with a UI toggle
+
+**Why it matters**: Easier interactive iteration and faster debugging of provider requests.
+
+---
+
 ## 📊 Complete Feature Comparison
 
 | Feature | Original | LoRAFactory |
@@ -194,6 +206,8 @@ LoRAFactory:
 - `.gitignore` - Git exclusions
 - `start.sh` / `stop.sh` - Convenience scripts
 - `CHANGELOG.md` - This file
+- `chat.html` - Chat page
+- `chat.js` - Chat page logic
 
 ### Modified Files
 - `app.js` - All new features + refactoring
