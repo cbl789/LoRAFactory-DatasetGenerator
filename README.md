@@ -47,7 +47,7 @@
 - **Vision captions** - AI-powered image descriptions with multiple LLM options
 - **Trigger word support** - Add custom prefixes to your training data
 - **🔐 Security Features** - API key encryption, session-only storage, auto-clear timer
-- **💬 Chat Interface** - Chat-style prompt-to-image and reference-image editing page with a live API stream for debugging
+- **💬 Chat Interface** - Chat-style prompt-to-image and reference-image editing page with a live API stream for debugging (supports drag/drop images onto the chat panel and call IDs for request/response pairing)
 
 ## 🎯 Generation Modes
 

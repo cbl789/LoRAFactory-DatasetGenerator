@@ -60,6 +60,7 @@ const CURATED_MODELS = [
 const uiGenerator = new UIGenerator(schemaManager);
 
 const API_LOG_MODE_KEY = 'chat_api_log_mode';
+let apiCallSeq = 0;
 
 const state = {
     referenceImageBase64: null,
@@ -212,7 +213,10 @@ function appendApiLog(entry) {
     if (!el) return;
 
     const ts = new Date().toISOString().replace('T', ' ').replace('Z', '');
-    el.textContent += `${ts} ${entry}\n`;
+
+    // Append as a text node to avoid read-modify-write clobbering when multiple
+    // async logs happen close together.
+    el.appendChild(document.createTextNode(`${ts} ${entry}\n`));
     el.scrollTop = el.scrollHeight;
 }
 
@@ -241,31 +245,32 @@ async function callProvider(methodName, payload, { label, extraSummary } = {}) {
     const providerId = providerManager.activeProviderId;
     const mode = getApiLogMode();
     const tag = label || methodName;
+    const callId = ++apiCallSeq;
 
     const start = performance.now();
     if (mode === 'verbose') {
-        appendApiLog(`[${providerId}] ${tag} -> request\n${safeStringify(payload)}`);
+        appendApiLog(`[${providerId}] #${callId} ${tag} -> request\n${safeStringify(payload)}`);
     } else {
         const summary = extraSummary ? ` ${extraSummary}` : '';
-        appendApiLog(`[${providerId}] ${tag} -> request${summary}`);
+        appendApiLog(`[${providerId}] #${callId} ${tag} -> request${summary}`);
     }
 
     try {
         const result = await provider[methodName](payload);
         const ms = Math.round(performance.now() - start);
         if (mode === 'verbose') {
-            appendApiLog(`[${providerId}] ${tag} <- response (${ms}ms)\n${safeStringify(result)}`);
+            appendApiLog(`[${providerId}] #${callId} ${tag} <- response (${ms}ms)\n${safeStringify(result)}`);
         } else {
-            appendApiLog(`[${providerId}] ${tag} <- response (${ms}ms)`);
+            appendApiLog(`[${providerId}] #${callId} ${tag} <- response (${ms}ms)`);
         }
         return result;
     } catch (e) {
         const ms = Math.round(performance.now() - start);
         const msg = e?.message || e?.toString?.() || 'Unknown error';
         if (mode === 'verbose') {
-            appendApiLog(`[${providerId}] ${tag} <- error (${ms}ms)\n${safeStringify({ message: msg, error: e })}`);
+            appendApiLog(`[${providerId}] #${callId} ${tag} <- error (${ms}ms)\n${safeStringify({ message: msg, error: e })}`);
         } else {
-            appendApiLog(`[${providerId}] ${tag} <- error (${ms}ms): ${msg}`);
+            appendApiLog(`[${providerId}] #${callId} ${tag} <- error (${ms}ms): ${msg}`);
         }
         throw e;
     }
@@ -446,6 +451,77 @@ function setupPanelToggle() {
     });
 }
 
+function setReferenceImageFromFile(file, sourceLabel = 'unknown') {
+    const log = (...args) => console.log('[chat][reference-upload]', ...args);
+    const input = document.getElementById('referenceInput');
+    const preview = document.getElementById('referencePreview');
+    const placeholder = document.getElementById('chatUploadPlaceholder');
+    const clearBtn = document.getElementById('clearRefBtn');
+
+    log('setReferenceImageFromFile', {
+        source: sourceLabel,
+        hasFile: !!file,
+        name: file?.name,
+        type: file?.type,
+        size: file?.size
+    });
+
+    if (!file) return;
+    if (!file.type || !file.type.startsWith('image/')) {
+        log('Rejected non-image file', { source: sourceLabel, type: file?.type, name: file?.name });
+        alert('Please upload an image file');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        log('FileReader onload', { source: sourceLabel, resultType: typeof reader.result });
+        state.referenceImageBase64 = reader.result;
+        state.referenceImageUrl = null;
+
+        if (preview) {
+            preview.src = state.referenceImageBase64;
+            preview.classList.remove('hidden');
+        }
+        if (placeholder) placeholder.classList.add('hidden');
+        if (clearBtn) clearBtn.style.display = '';
+        if (input) input.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+function setupChatPanelDrop() {
+    const panel = document.querySelector('.chat-panel');
+    if (!panel) return;
+
+    const log = (...args) => console.log('[chat][reference-upload]', ...args);
+
+    panel.addEventListener('dragover', (e) => {
+        if (!e.dataTransfer) return;
+        if (e.dataTransfer.types && !Array.from(e.dataTransfer.types).includes('Files')) return;
+        e.preventDefault();
+        panel.classList.add('dragover');
+    });
+
+    panel.addEventListener('dragleave', () => {
+        panel.classList.remove('dragover');
+    });
+
+    panel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        panel.classList.remove('dragover');
+        const file = e.dataTransfer?.files?.[0];
+        log('drop on chat-panel', {
+            hasFile: !!file,
+            name: file?.name,
+            type: file?.type,
+            size: file?.size,
+            fileCount: e.dataTransfer?.files?.length
+        });
+        setReferenceImageFromFile(file, 'chat-panel drop');
+    });
+}
+
 function setupReferenceUpload() {
     const zone = document.getElementById('chatUploadZone');
     const input = document.getElementById('referenceInput');
@@ -456,33 +532,6 @@ function setupReferenceUpload() {
     if (!zone || !input || !preview || !placeholder || !clearBtn) return;
 
     const log = (...args) => console.log('[chat][reference-upload]', ...args);
-
-    const handleFile = (file) => {
-        log('handleFile', {
-            hasFile: !!file,
-            name: file?.name,
-            type: file?.type,
-            size: file?.size
-        });
-        if (!file) return;
-        if (!file.type || !file.type.startsWith('image/')) {
-            log('Rejected non-image file', { type: file?.type, name: file?.name });
-            alert('Please upload an image file');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => {
-            log('FileReader onload', { resultType: typeof reader.result });
-            state.referenceImageBase64 = reader.result;
-            state.referenceImageUrl = null;
-            preview.src = state.referenceImageBase64;
-            preview.classList.remove('hidden');
-            placeholder.classList.add('hidden');
-            clearBtn.style.display = '';
-        };
-        reader.readAsDataURL(file);
-    };
 
     zone.addEventListener('click', () => {
         log('zone click -> open file picker');
@@ -511,7 +560,7 @@ function setupReferenceUpload() {
             size: file?.size,
             fileCount: e.dataTransfer?.files?.length
         });
-        handleFile(file);
+        setReferenceImageFromFile(file, 'upload-zone drop');
     });
 
     input.addEventListener('change', async () => {
@@ -523,7 +572,7 @@ function setupReferenceUpload() {
             size: file?.size,
             fileCount: input.files?.length
         });
-        handleFile(file);
+        setReferenceImageFromFile(file, 'file-picker');
     });
 
     clearBtn.addEventListener('click', () => {
@@ -642,6 +691,7 @@ async function init() {
     setupApiStreamPanel();
     setupPanelToggle();
     setupReferenceUpload();
+    setupChatPanelDrop();
     await populateImageModels();
 
     const sendBtn = document.getElementById('sendBtn');

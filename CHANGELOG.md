@@ -143,6 +143,8 @@ LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://g
 - Adds a dedicated chat page for prompt-to-image and reference-image editing
 - Includes an **API Stream** panel that logs provider calls (request/response/error) live
 - Supports **Summary** and **Verbose** logging modes with a UI toggle
+- Supports drag & drop images directly onto the chat panel to set the reference image
+- Adds call IDs and append-safe logging so request/response pairs don’t get dropped
 
 **Why it matters**: Easier interactive iteration and faster debugging of provider requests.
 

@@ -81,6 +81,11 @@ body {
     height: calc(100vh - 140px);
 }
 
+.chat-panel.dragover {
+    outline: 2px dashed var(--accent);
+    outline-offset: -10px;
+}
+
 .api-panel {
     display: flex;
     flex-direction: column;
