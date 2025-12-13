@@ -4,6 +4,16 @@
  */
 
 import { providerManager, GenericProvider } from './api_providers.js';
+import { schemaManager } from './schema_manager.js';
+import { UIGenerator } from './ui_generator.js';
+import { parameterMapper } from './parameter_mapper.js';
+
+// =============================================================================
+// Dynamic Parameters Management
+// =============================================================================
+
+// Initialize UIGenerator
+const uiGenerator = new UIGenerator(schemaManager);
 
 // =============================================================================
 // Custom Provider Management
@@ -471,6 +481,8 @@ async function saveApiKey() {
 
     try {
         await setApiKey(key, password);
+        // Update schema manager with API key
+        schemaManager.setApiKey(key);
         hideApiKeyModal();
         const storageType = settings.useSessionStorage ? 'session' : 'persistent';
         const encrypted = settings.useEncryption ? ' (encrypted)' : '';
@@ -606,6 +618,7 @@ function setMode(mode) {
 
     // Update default system prompt placeholder
     updateSystemPromptPlaceholder();
+    updateSavedPromptsList(); // Refresh saved prompts list when mode changes
 }
 
 function updateSystemPromptPlaceholder() {
@@ -624,11 +637,255 @@ function toggleSystemPrompt() {
 
 function resetSystemPrompt() {
     document.getElementById('customSystemPrompt').value = '';
+    document.getElementById('promptNameInput').value = '';
+    updateSavedPromptsList();
 }
 
 function getSystemPrompt() {
     const custom = document.getElementById('customSystemPrompt').value.trim();
     return custom || DEFAULT_SYSTEM_PROMPTS[state.mode];
+}
+
+// =============================================================================
+// System Prompt Storage
+// =============================================================================
+
+function getSavedPrompts() {
+    try {
+        const saved = localStorage.getItem('saved_system_prompts');
+        return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+        console.error('Failed to load saved prompts:', e);
+        return {};
+    }
+}
+
+function saveSavedPrompts(prompts) {
+    try {
+        localStorage.setItem('saved_system_prompts', JSON.stringify(prompts));
+    } catch (e) {
+        console.error('Failed to save prompts:', e);
+        alert('Failed to save prompt. Check console for details.');
+    }
+}
+
+function saveSystemPrompt() {
+    const name = document.getElementById('promptNameInput').value.trim();
+    const prompt = document.getElementById('customSystemPrompt').value.trim();
+    
+    if (!name) {
+        alert('Please enter a name for this prompt.');
+        return;
+    }
+    
+    if (!prompt) {
+        alert('Please enter a prompt to save.');
+        return;
+    }
+    
+    const saved = getSavedPrompts();
+    saved[name] = {
+        prompt: prompt,
+        mode: state.mode,
+        savedAt: new Date().toISOString()
+    };
+    
+    saveSavedPrompts(saved);
+    updateSavedPromptsList();
+    document.getElementById('promptNameInput').value = '';
+    
+    // Show confirmation
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✓ Saved!';
+    btn.style.background = 'var(--success)';
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.background = '';
+    }, 2000);
+}
+
+function loadSavedPrompt() {
+    const select = document.getElementById('savedPromptSelect');
+    const name = select.value;
+    
+    if (!name) {
+        alert('Please select a saved prompt to load.');
+        return;
+    }
+    
+    const saved = getSavedPrompts();
+    const savedPrompt = saved[name];
+    
+    if (!savedPrompt) {
+        alert('Prompt not found.');
+        updateSavedPromptsList();
+        return;
+    }
+    
+    document.getElementById('customSystemPrompt').value = savedPrompt.prompt;
+    document.getElementById('promptNameInput').value = name;
+    
+    // Show confirmation
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✓ Loaded!';
+    btn.style.background = 'var(--success)';
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.background = '';
+    }, 1500);
+}
+
+function deleteSavedPrompt() {
+    const select = document.getElementById('savedPromptSelect');
+    const name = select.value;
+    
+    if (!name) {
+        alert('Please select a prompt to delete.');
+        return;
+    }
+    
+    if (!confirm(`Delete saved prompt "${name}"?`)) {
+        return;
+    }
+    
+    const saved = getSavedPrompts();
+    delete saved[name];
+    saveSavedPrompts(saved);
+    updateSavedPromptsList();
+    select.value = '';
+    
+    // Clear inputs if the deleted prompt was loaded
+    if (document.getElementById('promptNameInput').value === name) {
+        document.getElementById('customSystemPrompt').value = '';
+        document.getElementById('promptNameInput').value = '';
+    }
+}
+
+function updateSavedPromptsList() {
+    const select = document.getElementById('savedPromptSelect');
+    const saved = getSavedPrompts();
+    
+    // Clear existing options except the first one
+    select.innerHTML = '<option value="">-- Select saved prompt --</option>';
+    
+    // Sort by name
+    const names = Object.keys(saved).sort();
+    
+    names.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        const savedPrompt = saved[name];
+        const date = new Date(savedPrompt.savedAt).toLocaleDateString();
+        const modeLabel = savedPrompt.mode || 'unknown';
+        option.textContent = `${name} (${modeLabel}, ${date})`;
+        select.appendChild(option);
+    });
+}
+
+function exportSystemPrompts() {
+    const saved = getSavedPrompts();
+    
+    if (Object.keys(saved).length === 0) {
+        alert('No saved prompts to export.');
+        return;
+    }
+    
+    const dataStr = JSON.stringify(saved, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `system-prompts-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    // Show confirmation
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✓ Exported!';
+    btn.style.background = 'var(--success)';
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.background = '';
+    }, 2000);
+}
+
+function importSystemPrompts(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const imported = JSON.parse(e.target.result);
+            
+            if (typeof imported !== 'object' || Array.isArray(imported)) {
+                throw new Error('Invalid format');
+            }
+            
+            // Validate structure
+            for (const [name, data] of Object.entries(imported)) {
+                if (!data.prompt || typeof data.prompt !== 'string') {
+                    throw new Error(`Invalid prompt data for "${name}"`);
+                }
+            }
+            
+            // Merge with existing (ask user)
+            const existing = getSavedPrompts();
+            const importedNames = Object.keys(imported);
+            const existingNames = Object.keys(existing);
+            const conflicts = importedNames.filter(name => existingNames.includes(name));
+            
+            if (conflicts.length > 0) {
+                const overwrite = confirm(
+                    `Found ${conflicts.length} prompt(s) with existing names:\n${conflicts.join(', ')}\n\n` +
+                    `Click OK to overwrite existing prompts, or Cancel to skip conflicts.`
+                );
+                
+                if (overwrite) {
+                    // Merge all
+                    const merged = { ...existing, ...imported };
+                    saveSavedPrompts(merged);
+                } else {
+                    // Only add new ones
+                    const merged = { ...existing };
+                    importedNames.forEach(name => {
+                        if (!existingNames.includes(name)) {
+                            merged[name] = imported[name];
+                        }
+                    });
+                    saveSavedPrompts(merged);
+                }
+            } else {
+                // No conflicts, merge all
+                const merged = { ...existing, ...imported };
+                saveSavedPrompts(merged);
+            }
+            
+            updateSavedPromptsList();
+            
+            // Show confirmation
+            alert(`Successfully imported ${importedNames.length} prompt(s)!`);
+            
+        } catch (error) {
+            console.error('Import error:', error);
+            alert(`Failed to import prompts: ${error.message}\n\nPlease ensure the file is valid JSON with the correct format.`);
+        }
+        
+        // Reset file input
+        event.target.value = '';
+    };
+    
+    reader.onerror = function() {
+        alert('Failed to read file.');
+        event.target.value = '';
+    };
+    
+    reader.readAsText(file);
 }
 
 // =============================================================================
@@ -700,11 +957,23 @@ function sleep(ms) {
 // =============================================================================
 
 async function generateStartImage(prompt, aspectRatio, resolution) {
+    // Get dynamic parameters from UI
+    const dynamicParams = uiGenerator.getValues();
+    
+    // Map parameters for the current provider
+    const mappedParams = parameterMapper.mapParameters(
+        state.imageModel,
+        providerManager.activeProviderId,
+        dynamicParams,
+        { prompt: prompt }
+    );
+
     return await providerManager.getActive().generateImage({
         prompt: prompt,
         aspectRatio: aspectRatio,
         resolution: resolution,
-        model: state.imageModel
+        model: state.imageModel,
+        dynamicParams: mappedParams
     });
 }
 
@@ -718,21 +987,45 @@ async function generateEndImage(startImageUrl, editPrompt, aspectRatio, resoluti
     // Use custom edit endpoint if specified, otherwise append /edit
     const editEndpoint = selectedModel.editEndpoint || `${state.imageModel}/edit`;
 
+    // Get dynamic parameters from UI
+    const dynamicParams = uiGenerator.getValues();
+    
+    // Map parameters for the current provider
+    const mappedParams = parameterMapper.mapParameters(
+        state.imageModel,
+        providerManager.activeProviderId,
+        dynamicParams,
+        { prompt: editPrompt, sourceUrl: startImageUrl }
+    );
+
     return await providerManager.getActive().editImage({
         sourceUrl: startImageUrl,
         prompt: editPrompt,
         resolution: resolution,
         model: state.imageModel,
-        editEndpoint: editEndpoint
+        editEndpoint: editEndpoint,
+        dynamicParams: mappedParams
     });
 }
 
 async function generateSingleImage(prompt, aspectRatio, resolution) {
+    // Get dynamic parameters from UI
+    const dynamicParams = uiGenerator.getValues();
+    
+    // Map parameters for the current provider
+    const mappedParams = parameterMapper.mapParameters(
+        state.imageModel,
+        providerManager.activeProviderId,
+        dynamicParams,
+        { prompt: prompt }
+    );
+
     return await providerManager.getActive().generateImage({
         prompt: prompt,
         aspectRatio: aspectRatio,
         resolution: resolution,
-        model: state.imageModel
+        model: state.imageModel,
+        dynamicParams: mappedParams
     });
 }
 
@@ -746,12 +1039,24 @@ async function generateReferenceVariation(referenceUrl, prompt, aspectRatio, res
     // Use custom edit endpoint if specified
     const editEndpoint = selectedModel.editEndpoint;
 
+    // Get dynamic parameters from UI
+    const dynamicParams = uiGenerator.getValues();
+    
+    // Map parameters for the current provider
+    const mappedParams = parameterMapper.mapParameters(
+        state.imageModel,
+        providerManager.activeProviderId,
+        dynamicParams,
+        { prompt: prompt, sourceUrl: referenceUrl }
+    );
+
     return await providerManager.getActive().editImage({
         sourceUrl: referenceUrl,
         prompt: prompt,
         resolution: resolution,
         model: state.imageModel,
-        editEndpoint: editEndpoint
+        editEndpoint: editEndpoint,
+        dynamicParams: mappedParams
     });
 }
 
@@ -855,16 +1160,26 @@ function getImageCost() {
 function updateCostEstimate() {
     const numPairs = parseInt(document.getElementById('numPairs').value) || 20;
     const useVision = document.getElementById('useVisionCaption').checked;
-    const resolution = document.getElementById('resolution').value;
+    
+    // Get dynamic parameters and calculate cost multiplier
+    const dynamicParams = uiGenerator.getValues();
+    const mappedParams = parameterMapper.mapParameters(
+        state.imageModel,
+        providerManager.activeProviderId,
+        dynamicParams,
+        {}
+    );
+    const costMultiplier = parameterMapper.getCostMultiplier(mappedParams);
 
-    const imagesPerItem = state.mode === 'pair' ? 2 : 1; // Pair mode = 2 images, single/reference = 1
-    const imageCost = getImageCost();
-    const baseCost = numPairs * imagesPerItem * imageCost;
+    const imagesPerItem = state.mode === 'pair' ? 2 : 1;
+    const baseCost = 0.15; // Base cost per image
+    const imageCost = baseCost * costMultiplier;
+    const totalImageCost = numPairs * imagesPerItem * imageCost;
     const visionCost = useVision ? numPairs * (state.mode === 'pair' ? 2 : 1) * 0.002 : 0;
     const llmCost = 0.02;
-    const total = baseCost + visionCost + llmCost;
+    const total = totalImageCost + visionCost + llmCost;
 
-    const resLabel = resolution === '4K' ? ' @4K' : '';
+    const resLabel = mappedParams.resolution === '4K' || mappedParams.quality === 'high' ? ' @4K' : '';
     document.getElementById('costEstimate').textContent = `~$${total.toFixed(2)}${resLabel}`;
 }
 
@@ -1502,35 +1817,58 @@ function clearResults() {
 // Image Model Discovery (FAL API)
 // =============================================================================
 
-async function fetchModelsFromFAL() {
+async function fetchModelsFromFAL(apiKey = null) {
     console.log('Fetching models from FAL.ai...');
 
     // Try to fetch pricing, but continue even if it fails
     let pricingData = {};
 
     try {
-        const apiKey = await getApiKey();
+        // Use provided API key or try to get it
+        const key = apiKey || await getApiKey();
         const headers = {
             'Content-Type': 'application/json'
         };
 
-        // Add API key if available (higher rate limits)
-        // Note: Try without auth first, as pricing endpoint may not require it
-        if (apiKey) {
-            headers['Authorization'] = `Bearer ${apiKey}`;
+        // Add API key if available (required for pricing endpoint)
+        // FAL.ai uses "Key" prefix, not "Bearer"
+        if (key) {
+            headers['Authorization'] = `Key ${key}`;
+            console.log('[fetchModelsFromFAL] Using API key for pricing request');
+        } else {
+            console.warn('[fetchModelsFromFAL] No API key available, pricing may fail');
         }
 
         // Fetch pricing for our curated models
-        const pricingUrl = `https://api.fal.ai/v1/models/pricing?endpoint_ids=${CURATED_MODEL_IDS.join(',')}`;
+        // API uses endpoint_id (singular) with comma-separated values
+        const pricingUrl = `https://api.fal.ai/v1/models/pricing?endpoint_id=${CURATED_MODEL_IDS.join(',')}`;
         console.log('Fetching pricing from:', pricingUrl);
 
         const pricingResponse = await fetch(pricingUrl, { headers });
 
         if (!pricingResponse.ok) {
+            const errorText = await pricingResponse.text();
             console.warn(`Pricing API returned ${pricingResponse.status}, using fallback pricing`);
+            console.warn('Error response:', errorText);
         } else {
-            pricingData = await pricingResponse.json();
-            console.log('Pricing data received:', pricingData);
+            const responseData = await pricingResponse.json();
+            console.log('Pricing API response:', responseData);
+            
+            // Response format: { "prices": [{ "endpoint_id": "...", "unit_price": 1, "unit": "...", "currency": "..." }], ... }
+            if (responseData.prices && Array.isArray(responseData.prices)) {
+                // Convert prices array to object keyed by endpoint_id
+                responseData.prices.forEach(item => {
+                    if (item.endpoint_id) {
+                        pricingData[item.endpoint_id] = {
+                            unit_price: item.unit_price,
+                            unit: item.unit,
+                            currency: item.currency
+                        };
+                    }
+                });
+            }
+            
+            console.log('Parsed pricing data:', pricingData);
         }
     } catch (error) {
         console.warn('Failed to fetch pricing, using fallback:', error);
@@ -1545,6 +1883,13 @@ async function fetchModelsFromFAL() {
         for (const modelId of CURATED_MODEL_IDS) {
             const config = MODEL_CONFIG[modelId] || {};
             const pricing = pricingData[modelId];
+            
+            // Log what we got for this model
+            if (pricing) {
+                console.log(`[Model] ${modelId}:`, { pricing, config });
+            } else {
+                console.log(`[Model] ${modelId}: No pricing data, using fallback`);
+            }
 
             // Extract version - search entire modelId, not just last part
             const versionMatch = modelId.match(/v(\d+(?:\.\d+)?)/i) ||
@@ -1593,15 +1938,47 @@ async function fetchModelsFromFAL() {
 
             // Format pricing
             let pricingText = fallbackPricing[modelId] || 'Pricing unavailable';
-            if (pricing && pricing.unit_price !== undefined) {
-                const price = pricing.unit_price;
-                const unit = pricing.unit || 'image';
-
-                if (price === 0) {
-                    pricingText = 'Free';
-                } else {
-                    pricingText = `$${price.toFixed(4)}/${unit}`;
+            let isApiPricing = false;
+            
+            if (pricing) {
+                // Handle different pricing response formats
+                let price, unit;
+                
+                if (pricing.unit_price !== undefined) {
+                    // Format: { unit_price: 0.15, unit: "image" }
+                    price = pricing.unit_price;
+                    unit = pricing.unit || 'image';
+                } else if (pricing.price !== undefined) {
+                    // Format: { price: 0.15, unit: "image" }
+                    price = pricing.price;
+                    unit = pricing.unit || 'image';
+                } else if (typeof pricing === 'number') {
+                    // Format: just a number
+                    price = pricing;
+                    unit = 'image';
+                } else if (pricing.cost !== undefined) {
+                    // Format: { cost: 0.15, ... }
+                    price = pricing.cost;
+                    unit = pricing.unit || 'image';
                 }
+                
+                if (price !== undefined) {
+                    isApiPricing = true;
+                    if (price === 0) {
+                        pricingText = 'Free';
+                    } else {
+                        // Format with appropriate decimal places
+                        const decimals = price < 0.01 ? 4 : (price < 1 ? 3 : 2);
+                        pricingText = `$${price.toFixed(decimals)}/${unit}`;
+                    }
+                }
+            }
+            
+            // Log pricing source
+            if (isApiPricing) {
+                console.log(`[Model] ${modelId}: Using API pricing: ${pricingText}`);
+            } else {
+                console.log(`[Model] ${modelId}: Using fallback pricing: ${pricingText}`);
             }
 
             models.push({
@@ -1609,6 +1986,7 @@ async function fetchModelsFromFAL() {
                 name: name,
                 version: version,
                 pricing: pricingText,
+                pricingSource: isApiPricing ? 'api' : 'fallback',
                 supportsEdit: config.supportsEdit || false,
                 editEndpoint: config.editEndpoint,
                 description: config.description || `${name} model`
@@ -1680,45 +2058,116 @@ async function fetchModelsFromFAL() {
 // =============================================================================
 
 function populateImageModels() {
-    const select = document.getElementById('imageModel');
-    const descElement = document.getElementById('imageModelDesc');
+    // Get unified panel select (this is the only select now)
+    const select = document.querySelector('#modelParametersPanel #imageModel');
+    const descElement = document.querySelector('#modelParametersPanel #imageModelDesc') || 
+                        document.querySelector('#modelParametersPanel .model-info small');
+    
+    if (!select) {
+        console.error('Model select element not found in unified panel');
+        return;
+    }
 
     // Clear existing options
     select.innerHTML = '';
 
-    // Add models
+    // Verify IMAGE_MODELS is populated
+    if (!IMAGE_MODELS || IMAGE_MODELS.length === 0) {
+        console.error('IMAGE_MODELS is empty! Cannot populate dropdown.');
+        descElement.textContent = 'Error: No models available. Check console for details.';
+        return;
+    }
+    
+    console.log(`[populateImageModels] Populating dropdown with ${IMAGE_MODELS.length} models:`, IMAGE_MODELS);
+
+    // Add models to dropdown
+    let apiPricingCount = 0;
+    let fallbackPricingCount = 0;
+    
     IMAGE_MODELS.forEach(model => {
         const option = document.createElement('option');
         option.value = model.id;
+        
+        // Track pricing source
+        if (model.pricingSource === 'api') {
+            apiPricingCount++;
+        } else {
+            fallbackPricingCount++;
+        }
+        
         option.textContent = `${model.name} v${model.version} - ${model.pricing}`;
         if (!model.supportsEdit) {
             option.textContent += ' (no edit)';
         }
         select.appendChild(option);
     });
+    
+    // Log pricing summary
+    console.log(`[populateImageModels] Pricing summary: ${apiPricingCount} from API, ${fallbackPricingCount} fallback`);
 
-    // Set default
+    // Set default value
     select.value = state.imageModel;
 
-    // Update description on change
-    select.addEventListener('change', (e) => {
-        state.imageModel = e.target.value;
-        const selectedModel = IMAGE_MODELS.find(m => m.id === e.target.value);
+    // Handle model change
+    const handleModelChange = async (e) => {
+        const newModelId = e.target.value;
+        state.imageModel = newModelId;
+        
+        const selectedModel = IMAGE_MODELS.find(m => m.id === newModelId);
         if (selectedModel) {
-            descElement.textContent = `v${selectedModel.version} - ${selectedModel.description}`;
+            // Update description
+            if (descElement) {
+                descElement.textContent = `v${selectedModel.version} - ${selectedModel.description}`;
+            }
 
             // Warn if model doesn't support edit and user is in pair/reference mode
             if (!selectedModel.supportsEdit && (state.mode === 'pair' || state.mode === 'reference')) {
                 alert(`⚠️ ${selectedModel.name} v${selectedModel.version} doesn't support image editing.\n\nPair mode and Reference mode require edit support. Please select a different model or switch to Single Image mode.`);
             }
+
+            // Render dynamic parameters UI
+            try {
+                await uiGenerator.renderUI(newModelId, 'modelParametersPanel');
+            } catch (error) {
+                console.error('Failed to render dynamic parameters:', error);
+                // Fallback: show legacy static controls
+                const legacyControls = document.getElementById('legacyStaticControls');
+                if (legacyControls) legacyControls.style.display = 'block';
+            }
         }
         updateCostEstimate();
-    });
+    };
+
+    // Add event listener
+    select.addEventListener('change', handleModelChange);
 
     // Set initial description
     const initialModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
-    if (initialModel) {
+    if (initialModel && descElement) {
         descElement.textContent = `v${initialModel.version} - ${initialModel.description}`;
+    }
+    
+    // Ensure panel is visible (remove hidden class if present)
+    const panel = document.getElementById('modelParametersPanel');
+    if (panel) {
+        panel.classList.remove('hidden');
+        console.log('[populateImageModels] Panel ensured visible');
+    } else {
+        console.error('[populateImageModels] Panel element not found!');
+    }
+    
+    // Render initial dynamic parameters UI
+    if (initialModel) {
+        setTimeout(async () => {
+            try {
+                await uiGenerator.renderUI(state.imageModel, 'modelParametersPanel');
+            } catch (error) {
+                console.error('Failed to render initial parameters:', error);
+                // Fallback: show legacy static controls
+                const legacyControls = document.getElementById('legacyStaticControls');
+                if (legacyControls) legacyControls.style.display = 'block';
+            }
+        }, 100);
     }
 }
 
@@ -1768,18 +2217,23 @@ async function init() {
         if (banner) banner.style.display = 'flex';
     }
 
-    // Fetch models from FAL API (with live pricing)
-    await fetchModelsFromFAL();
+    // Check for API key FIRST, then fetch models with pricing
+    let apiKey = await getApiKey();
+    
+    // Fetch models from FAL API (with live pricing) - pass API key if available
+    await fetchModelsFromFAL(apiKey);
 
-    // Populate image models dropdown
+    // Populate image models dropdown (wait a tick to ensure IMAGE_MODELS is populated)
+    await new Promise(resolve => setTimeout(resolve, 0));
     populateImageModels();
 
-    // Check for API key and configure FAL
-    const apiKey = await getApiKey();
+    // Configure providers with API key
     if (apiKey) {
         // Initialize active provider
         try {
             await providerManager.getActive().setApiKey(apiKey);
+            // Also set API key for schema manager
+            schemaManager.setApiKey(apiKey);
         } catch (e) {
             console.error('Failed to configure provider:', e);
         }
@@ -1788,6 +2242,14 @@ async function init() {
         const encrypted = settings.useEncryption ? ' (encrypted)' : '';
         updateStatus(true, `API Key Set${encrypted}`);
         setupAutoClear();
+        
+        // Retry pricing fetch with API key if we didn't have it before
+        if (IMAGE_MODELS.every(m => m.pricingSource === 'fallback')) {
+            console.log('[init] Retrying pricing fetch with API key...');
+            await fetchModelsFromFAL(apiKey);
+            // Re-populate dropdown with updated pricing
+            populateImageModels();
+        }
     } else {
         updateStatus(false, 'Click 🔑 to add API key');
         setTimeout(() => showApiKeyModal(), 500);
@@ -1798,6 +2260,9 @@ async function init() {
     document.getElementById('useVisionCaption').addEventListener('change', updateCostEstimate);
     document.getElementById('resolution').addEventListener('change', updateCostEstimate);
     updateCostEstimate();
+    
+    // Initialize saved prompts list
+    updateSavedPromptsList();
 
     // Initialize mode
     setMode('pair');
@@ -1850,6 +2315,11 @@ window.saveSecuritySettings = saveSecuritySettings;
 window.dismissSecurityBanner = dismissSecurityBanner;
 window.toggleSystemPrompt = toggleSystemPrompt;
 window.resetSystemPrompt = resetSystemPrompt;
+window.saveSystemPrompt = saveSystemPrompt;
+window.loadSavedPrompt = loadSavedPrompt;
+window.deleteSavedPrompt = deleteSavedPrompt;
+window.exportSystemPrompts = exportSystemPrompts;
+window.importSystemPrompts = importSystemPrompts;
 window.handleReferenceUpload = handleReferenceUpload;
 window.clearReference = clearReference;
 window.copyPromptToClipboard = copyPromptToClipboard;

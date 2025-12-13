@@ -1098,3 +1098,304 @@ textarea {
     text-decoration: none;
     cursor: pointer;
 }
+
+/* =============================================================================
+   Unified Model Configuration Panel
+   ============================================================================= */
+
+/* Model Configuration Panel - Unified Design */
+.model-config-panel {
+    background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+    border: 1px solid var(--border-light);
+    margin-bottom: var(--space-lg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.model-config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+
+.model-config-title h3 {
+    margin: 0 0 4px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.model-config-subtitle {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.model-config-content {
+    padding: var(--space-lg);
+}
+
+/* Model Selection Section */
+.model-selection-section {
+    margin-bottom: var(--space-xl);
+    padding-bottom: var(--space-xl);
+    border-bottom: 2px solid var(--border);
+}
+
+.model-select-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+}
+
+.label-icon {
+    font-size: 1.2rem;
+}
+
+.model-select {
+    width: 100%;
+    padding: var(--space-md);
+    background: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.model-select:hover {
+    border-color: var(--accent-dim);
+    background: var(--bg-hover);
+}
+
+.model-select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(245, 213, 71, 0.15);
+}
+
+.model-info {
+    margin-top: var(--space-xs);
+}
+
+.model-info small {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Dynamic Parameters Section */
+.dynamic-parameters-section {
+    margin-top: var(--space-md);
+}
+
+.parameters-content {
+    padding: 0;
+}
+
+/* Parameter Grid - Responsive 3-column */
+.param-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-lg);
+    margin-top: var(--space-md);
+}
+
+/* Individual Parameter Control */
+.param-control {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+}
+
+.param-control:hover {
+    border-color: var(--border-light);
+    background: var(--bg-hover);
+}
+
+.param-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--space-xs);
+}
+
+.param-description {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: var(--space-sm);
+    line-height: 1.4;
+}
+
+.param-input {
+    font-family: var(--font-main);
+    font-size: 0.9rem;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-primary);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.param-input:hover {
+    border-color: var(--border-light);
+}
+
+.param-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(245, 213, 71, 0.15);
+    background: var(--bg-secondary);
+}
+
+.param-input-sm {
+    padding: 6px var(--space-sm);
+    font-size: 0.85rem;
+}
+
+/* Union Control (Preset/Custom Toggle) */
+.union-control {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.union-toggle {
+    display: inline-flex;
+    background: var(--bg-primary);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    width: fit-content;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.union-toggle-btn {
+    padding: 6px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: var(--font-main);
+}
+
+.union-toggle-btn:hover {
+    background: var(--bg-hover);
+}
+
+.union-toggle-btn.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: var(--bg-primary);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(245, 213, 71, 0.3);
+}
+
+/* Custom Dimensions (Width/Height inputs) */
+.custom-dimensions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+}
+
+.param-sublabel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Parameter Sections */
+.param-section {
+    margin-bottom: var(--space-xl);
+    padding: var(--space-lg);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+
+.param-section:last-child {
+    margin-bottom: 0;
+}
+
+.param-section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: color 0.2s;
+    margin-bottom: var(--space-md);
+}
+
+.param-section-header:hover {
+    color: var(--accent);
+}
+
+.param-section-header .toggle-icon {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+}
+
+.param-section-content {
+    margin-top: var(--space-md);
+}
+
+/* Responsive - Mobile */
+@media (max-width: 768px) {
+    .model-config-header {
+        padding: var(--space-md);
+    }
+
+    .model-config-content {
+        padding: var(--space-md);
+    }
+
+    .model-selection-section {
+        margin-bottom: var(--space-lg);
+        padding-bottom: var(--space-lg);
+    }
+
+    .param-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .param-section {
+        padding: var(--space-md);
+    }
+
+    .param-control {
+        padding: var(--space-sm);
+    }
+
+    .custom-dimensions {
+        grid-template-columns: 1fr;
+    }
+}

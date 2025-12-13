@@ -7,7 +7,7 @@
 set -e  # Exit on error
 
 # Configuration
-PORT=3000
+PORT=3100
 URL="http://localhost:$PORT"
 
 # Colors for output

@@ -1,7 +1,7 @@
 # LoRAFactory - Complete Feature List
 
 ## Summary
-LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io with **7 major new features** plus architectural improvements.
+LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io with **9 major new features** plus architectural improvements.
 
 ---
 
@@ -104,6 +104,38 @@ LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://g
 
 ---
 
+### 8. **Dynamic Model Parameters** 🎛️
+**NEW FILES**: `schema_manager.js`, `ui_generator.js`, `parameter_mapper.js`
+
+**What it does**:
+- **Fetches OpenAPI schemas** from FAL.ai for each model dynamically
+- **Generates UI controls** automatically based on schema (text inputs, number sliders, dropdowns, toggles)
+- **Handles union types** with preset/custom toggles (e.g., Seedream's image size)
+- **Categorizes parameters** into basic/advanced/hidden sections
+- **Caches schemas** locally for fast model switching
+- **Fallback schemas** for known models when API is unavailable
+- **Unified UI panel** consolidating model selection and parameters
+
+**Why it matters**: No more hardcoded parameters! UI adapts automatically to each model's requirements. Users get the right controls for each model without manual configuration.
+
+---
+
+### 9. **Custom System Prompt Management** 💾
+**NEW CODE**: Lines 2000-2200+ in `app.js`
+
+**Features**:
+- **Save prompts** with custom names, tagged by generation mode
+- **Load saved prompts** from dropdown list filtered by current mode
+- **Delete prompts** with confirmation
+- **Export/Import** prompts as JSON files for backup and sharing
+- **Persistent storage** in browser localStorage (survives browser restarts and server stops)
+- **Conflict handling** when importing prompts with existing names
+- **Metadata tracking** (save date, mode) for each saved prompt
+
+**Why it matters**: Users can build a library of custom prompts for different use cases, share them between browsers/computers, and never lose their work.
+
+---
+
 ## 📊 Complete Feature Comparison
 
 | Feature | Original | LoRAFactory |
@@ -123,6 +155,8 @@ LoRAFactory is an enhanced fork of [NanoBanana LoRA Dataset Generator](https://g
 | **Collapsible Prompts Grid** | ❌ | ✅ **NEW** |
 | **Model Selection UI** | ❌ | ✅ **NEW** |
 | **Provider Selector** | ❌ | ✅ **NEW** |
+| **Dynamic Model Parameters** | ❌ | ✅ **NEW** |
+| **Custom Prompt Management** | ❌ | ✅ **NEW** |
 
 ---
 
@@ -134,8 +168,11 @@ Original:
   app.js: 927 lines (monolithic, FAL-only)
 
 LoRAFactory:
-  app.js: 1,655 lines (+728 lines)
+  app.js: 2,334 lines (+1,407 lines)
   api_providers.js: 148 lines (NEW)
+  schema_manager.js: ~400 lines (NEW)
+  ui_generator.js: ~300 lines (NEW)
+  parameter_mapper.js: ~150 lines (NEW)
 ```
 
 ### Line Count Breakdown
@@ -151,6 +188,9 @@ LoRAFactory:
 
 ### New Files
 - `api_providers.js` - Provider abstraction layer
+- `schema_manager.js` - OpenAPI schema fetching and parsing
+- `ui_generator.js` - Dynamic UI control generation
+- `parameter_mapper.js` - Parameter translation to API format
 - `.gitignore` - Git exclusions
 - `start.sh` / `stop.sh` - Convenience scripts
 - `CHANGELOG.md` - This file
@@ -173,6 +213,8 @@ LoRAFactory:
 5. Collapsible prompts grid (usability)
 6. Enhanced model selection (flexibility)
 7. Better UX & polish (professionalism)
+8. Dynamic model parameters (adaptability)
+9. Custom prompt management (productivity)
 
 **What it Keeps**: All original features (100%)
 

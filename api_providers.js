@@ -63,29 +63,48 @@ export class FalProvider extends ApiProvider {
         }
     }
 
-    async generateImage({ prompt, aspectRatio, resolution, model }) {
-        // Handle "auto" aspect ratio or specific logic if needed
-        const result = await this._request(model, {
+    async generateImage({ prompt, aspectRatio, resolution, model, dynamicParams = {} }) {
+        // Support both legacy and dynamic parameters
+        const params = {
             prompt: prompt,
-            aspect_ratio: aspectRatio,
-            resolution: resolution,
             num_images: 1,
-            enable_safety_checker: false
-        });
+            enable_safety_checker: false,
+            // Spread dynamic params (will override defaults if provided)
+            ...dynamicParams
+        };
+
+        // Add legacy params if not in dynamicParams
+        if (!dynamicParams.aspect_ratio && aspectRatio) {
+            params.aspect_ratio = aspectRatio;
+        }
+        if (!dynamicParams.resolution && resolution) {
+            params.resolution = resolution;
+        }
+
+        const result = await this._request(model, params);
         return result.images[0].url;
     }
 
-    async editImage({ sourceUrl, prompt, resolution, model, editEndpoint }) {
+    async editImage({ sourceUrl, prompt, resolution, model, editEndpoint, dynamicParams = {} }) {
         // Use custom edit endpoint if provided (some generic models might fallback)
         const endpoint = editEndpoint || `${model}/edit`;
 
-        const result = await this._request(endpoint, {
+        // Support both legacy and dynamic parameters
+        const params = {
             image_urls: [sourceUrl],
             prompt: prompt,
             aspect_ratio: 'auto',
-            resolution: resolution,
-            enable_safety_checker: false
-        });
+            enable_safety_checker: false,
+            // Spread dynamic params (will override defaults if provided)
+            ...dynamicParams
+        };
+
+        // Add legacy resolution if not in dynamicParams
+        if (!dynamicParams.resolution && resolution) {
+            params.resolution = resolution;
+        }
+
+        const result = await this._request(endpoint, params);
         return result.images[0].url;
     }
 
@@ -210,16 +229,18 @@ export class GenericProvider extends ApiProvider {
     }
 
     async generateImage(params) {
-        // params: { prompt, aspectRatio, resolution, model }
+        // params: { prompt, aspectRatio, resolution, model, dynamicParams }
         // Generic providers might rely on a template for "prompt"
-        return await this._request('generateImage', params);
+        const allParams = { ...params, ...(params.dynamicParams || {}) };
+        return await this._request('generateImage', allParams);
     }
 
     // TODO: Implement edit, crypto, upload if configured
     async editImage(params) {
         // If config has 'editImage' endpoint, use it
         if (this.config.endpoints?.editImage) {
-            return await this._request('editImage', params);
+            const allParams = { ...params, ...(params.dynamicParams || {}) };
+            return await this._request('editImage', allParams);
         }
         throw new Error(`${this.name} does not support image editing`);
     }
@@ -336,14 +357,22 @@ export class KieProvider extends ApiProvider {
         throw new Error('Task timeout: exceeded maximum polling attempts');
     }
 
-    async generateImage({ prompt, aspectRatio, resolution, model }) {
-        const quality = resolution === '4K' ? 'high' : 'basic';
-
-        const taskId = await this._createTask('seedream/4.5-text-to-image', {
+    async generateImage({ prompt, aspectRatio, resolution, model, dynamicParams = {} }) {
+        // Support both legacy and dynamic parameters
+        const params = {
             prompt: prompt,
-            aspect_ratio: aspectRatio,
-            quality: quality
-        });
+            ...dynamicParams
+        };
+
+        // Add legacy params if not in dynamicParams
+        if (!dynamicParams.aspect_ratio && aspectRatio) {
+            params.aspect_ratio = aspectRatio;
+        }
+        if (!dynamicParams.quality && resolution) {
+            params.quality = resolution === '4K' ? 'high' : 'basic';
+        }
+
+        const taskId = await this._createTask('seedream/4.5-text-to-image', params);
 
         const result = await this._pollTaskResult(taskId);
 
@@ -357,15 +386,21 @@ export class KieProvider extends ApiProvider {
         throw new Error('No image URL in response');
     }
 
-    async editImage({ sourceUrl, prompt, resolution, model, editEndpoint }) {
-        const quality = resolution === '4K' ? 'high' : 'basic';
-
-        const taskId = await this._createTask('seedream/4.5-edit', {
+    async editImage({ sourceUrl, prompt, resolution, model, editEndpoint, dynamicParams = {} }) {
+        // Support both legacy and dynamic parameters
+        const params = {
             prompt: prompt,
             image_urls: [sourceUrl],
-            aspect_ratio: 'auto', // Preserve source aspect ratio
-            quality: quality
-        });
+            aspect_ratio: 'auto',
+            ...dynamicParams
+        };
+
+        // Add legacy quality if not in dynamicParams
+        if (!dynamicParams.quality && resolution) {
+            params.quality = resolution === '4K' ? 'high' : 'basic';
+        }
+
+        const taskId = await this._createTask('seedream/4.5-edit', params);
 
         const result = await this._pollTaskResult(taskId);
 

@@ -8,7 +8,7 @@
 
 ## ✨ What's New in LoRAFactory
 
-**7 major enhancements over the original**:
+**9 major enhancements over the original**:
 
 - **🔌 Multi-Provider Support** - Extensible architecture for FAL.ai, OpenAI, Replicate, and more
 - **🔐 AES-256 Encryption** - Military-grade API key encryption with password protection
@@ -17,6 +17,8 @@
 - **📋 Collapsible Prompts** - Grid view with expandable prompts and copy-to-clipboard
 - **🎨 Enhanced Model Selection** - Dynamic model discovery with pricing and compatibility checks
 - **⚙️ Security Settings** - Session-only storage, auto-clear timer, encryption options
+- **🎛️ Dynamic Model Parameters** - Schema-driven UI that adapts to each model's requirements automatically
+- **💾 Custom Prompt Management** - Save, load, export, and import custom system prompts with persistence
 
 **All original features** (3 modes, vision captions, parallel generation, etc.) from [NanoBanana](https://github.com/lovisdotio/NanoBananaLoraDatasetGenerator) by Lovis.io are preserved.
 
@@ -34,7 +36,8 @@
   - 🖼️ **Single Image** - Style/aesthetic images for Z-Image and style LoRAs
   - 📷 **Reference Image** - Upload a character/product and generate variations
 - **🎨 Multiple Image Models** - Choose from Nano Banana Pro, Flux 2 Flex, Seedream, Flux Dev/Schnell, Aura Flow, Recraft
-- **🧠 Custom System Prompt** - Full control over AI prompt generation
+- **🎛️ Dynamic Model Parameters** - UI automatically adapts to each model's parameters (image size, aspect ratio, etc.)
+- **🧠 Custom System Prompt** - Full control over AI prompt generation with save/load/export/import
 - **💰 Transparent Pricing** - See costs per model before generating
 - **Zero server setup** - Runs entirely in your browser
 - **Direct API calls** - Talks to AI providers directly
@@ -114,6 +117,25 @@ npx serve .
 - **Custom**: Add any REST API provider via UI
 
 **Security**: Your keys are stored ONLY in your browser's localStorage. They're never sent anywhere except directly to the selected provider's servers.
+
+## 🎛️ Dynamic Model Parameters
+
+LoRAFactory automatically fetches each model's parameter schema from FAL.ai and generates a custom UI:
+- **Preset/Custom toggles** for image size (e.g., Seedream's preset sizes vs custom dimensions)
+- **Model-specific controls** that adapt when you switch models
+- **Basic/Advanced sections** for organized parameter display
+- **Automatic validation** based on model requirements
+
+Parameters are cached locally for fast switching between models.
+
+## 💾 Custom System Prompt Management
+
+Save and manage multiple custom system prompts:
+- **Save prompts** with custom names for each generation mode
+- **Load saved prompts** from a dropdown list
+- **Export/Import** prompts as JSON files for backup and sharing
+- **Persistent storage** in browser localStorage (survives browser restarts)
+- **Mode-specific** prompts automatically filtered by current generation mode
 
 ## 💰 Pricing
 
