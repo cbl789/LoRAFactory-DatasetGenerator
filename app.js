@@ -2151,6 +2151,11 @@ function populateImageModels() {
         try {
             localStorage.setItem('selected_image_model', models[0].id);
         } catch (e) {}
+
+        // Update description for auto-selected model
+        if (descElement && models[0]) {
+            descElement.textContent = `${provider.name}: ${models[0].name} v${models[0].version} - ${models[0].pricing}`;
+        }
     }
 
     // Handle model change
