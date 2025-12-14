@@ -13,6 +13,13 @@ class Monitor {
         this.fileLoggingEnabled = true;
         this.logServerUrl = 'http://localhost:3101/log';
 
+        // Store original console methods to prevent recursion
+        this.originalConsole = {
+            log: console.log.bind(console),
+            error: console.error.bind(console),
+            warn: console.warn.bind(console)
+        };
+
         // Intercept console methods
         this._interceptConsole();
 
@@ -35,10 +42,10 @@ class Monitor {
                     message: 'Monitor initialized'
                 })
             });
-            console.log('📁 File logging enabled → logs/lorafactory_*.log');
+            this.originalConsole.log('📁 File logging enabled → logs/lorafactory_*.log');
         } catch (e) {
             this.fileLoggingEnabled = false;
-            console.warn('⚠️ File logging unavailable (log server not running)');
+            this.originalConsole.warn('⚠️ File logging unavailable (log server not running)');
         }
     }
 
@@ -91,14 +98,14 @@ class Monitor {
         if (this.enabled) {
             const icon = error ? '❌' : '✅';
             const color = error ? 'color: red' : 'color: green';
-            console.log(
+            this.originalConsole.log(
                 `%c${icon} [API] ${provider}.${method}`,
                 color,
                 error ? `ERROR: ${error}` : 'SUCCESS'
             );
-            if (params) console.log('  📤 Request:', params);
-            if (result) console.log('  📥 Response:', result);
-            if (error) console.error('  ⚠️ Error:', error);
+            if (params) this.originalConsole.log('  📤 Request:', params);
+            if (result) this.originalConsole.log('  📥 Response:', result);
+            if (error) this.originalConsole.error('  ⚠️ Error:', error);
         }
 
         return log;
@@ -119,7 +126,7 @@ class Monitor {
         this._writeToFile(log); // Write to file
 
         if (this.enabled) {
-            console.error(`🔴 [ERROR] ${source}:`, error);
+            this.originalConsole.error(`🔴 [ERROR] ${source}:`, error);
         }
     }
 
@@ -147,7 +154,7 @@ class Monitor {
         this.logs.push(log);
 
         if (this.enabled) {
-            console.log(`📍 [${category}] ${action}`, details || '');
+            this.originalConsole.log(`📍 [${category}] ${action}`, details || '');
         }
     }
 
@@ -197,22 +204,22 @@ class Monitor {
 
     printStats() {
         const stats = this.getStats();
-        console.log('\n' + '='.repeat(60));
-        console.log('📊 LORAFACTORY MONITORING STATS');
-        console.log('='.repeat(60));
-        console.log(`⏱️  Uptime: ${(stats.uptime / 1000).toFixed(1)}s`);
-        console.log(`📝 Total Logs: ${stats.totalLogs}`);
-        console.log(`❌ Total Errors: ${stats.totalErrors}`);
-        console.log(`\n🌐 API Calls:`);
-        console.log(`   Total: ${stats.apiCalls.total}`);
-        console.log(`   Success: ${stats.apiCalls.success}`);
-        console.log(`   Failed: ${stats.apiCalls.failed}`);
-        console.log(`   Success Rate: ${stats.apiCalls.successRate}`);
-        console.log(`\n📍 By Provider:`);
+        this.originalConsole.log('\n' + '='.repeat(60));
+        this.originalConsole.log('📊 LORAFACTORY MONITORING STATS');
+        this.originalConsole.log('='.repeat(60));
+        this.originalConsole.log(`⏱️  Uptime: ${(stats.uptime / 1000).toFixed(1)}s`);
+        this.originalConsole.log(`📝 Total Logs: ${stats.totalLogs}`);
+        this.originalConsole.log(`❌ Total Errors: ${stats.totalErrors}`);
+        this.originalConsole.log(`\n🌐 API Calls:`);
+        this.originalConsole.log(`   Total: ${stats.apiCalls.total}`);
+        this.originalConsole.log(`   Success: ${stats.apiCalls.success}`);
+        this.originalConsole.log(`   Failed: ${stats.apiCalls.failed}`);
+        this.originalConsole.log(`   Success Rate: ${stats.apiCalls.successRate}`);
+        this.originalConsole.log(`\n📍 By Provider:`);
         Object.entries(stats.apiCalls.byProvider).forEach(([provider, data]) => {
-            console.log(`   ${provider}: ${data.success}/${data.total} (${((data.success/data.total)*100).toFixed(0)}%)`);
+            this.originalConsole.log(`   ${provider}: ${data.success}/${data.total} (${((data.success/data.total)*100).toFixed(0)}%)`);
         });
-        console.log('='.repeat(60) + '\n');
+        this.originalConsole.log('='.repeat(60) + '\n');
     }
 
     getRecentErrors(count = 10) {
@@ -227,17 +234,17 @@ class Monitor {
         this.logs = [];
         this.errors = [];
         this.apiCalls = [];
-        console.log('🧹 Monitor cleared');
+        this.originalConsole.log('🧹 Monitor cleared');
     }
 
     enable() {
         this.enabled = true;
-        console.log('👁️ Monitor enabled');
+        this.originalConsole.log('👁️ Monitor enabled');
     }
 
     disable() {
         this.enabled = false;
-        console.log('🙈 Monitor disabled');
+        this.originalConsole.log('🙈 Monitor disabled');
     }
 }
 
@@ -246,14 +253,14 @@ window.monitor = new Monitor();
 
 // Helper functions
 window.printStats = () => monitor.printStats();
-window.showErrors = () => console.table(monitor.getRecentErrors());
-window.showApiCalls = () => console.table(monitor.getRecentApiCalls());
+window.showErrors = () => monitor.originalConsole.table(monitor.getRecentErrors());
+window.showApiCalls = () => monitor.originalConsole.table(monitor.getRecentApiCalls());
 window.clearMonitor = () => monitor.clear();
 
-console.log('👁️ Monitor initialized. Available commands:');
-console.log('  monitor.printStats()  - Show statistics');
-console.log('  monitor.getRecentErrors()  - Get recent errors');
-console.log('  monitor.getRecentApiCalls()  - Get recent API calls');
-console.log('  printStats()  - Shortcut for stats');
-console.log('  showErrors()  - Show errors table');
-console.log('  showApiCalls()  - Show API calls table');
+monitor.originalConsole.log('👁️ Monitor initialized. Available commands:');
+monitor.originalConsole.log('  monitor.printStats()  - Show statistics');
+monitor.originalConsole.log('  monitor.getRecentErrors()  - Get recent errors');
+monitor.originalConsole.log('  monitor.getRecentApiCalls()  - Get recent API calls');
+monitor.originalConsole.log('  printStats()  - Shortcut for stats');
+monitor.originalConsole.log('  showErrors()  - Show errors table');
+monitor.originalConsole.log('  showApiCalls()  - Show API calls table');
