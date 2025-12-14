@@ -136,9 +136,9 @@ Key Wisdom Gate models:
 - Image editing via multimodal messages (text + image_url)
 - Response format: Image URL in markdown `![image](https://...)`
 - Regex extraction: `/https:\/\/[^)]+\.(png|jpg|jpeg)/`
+- **Reference images**: Base64 data URLs via FileReader API (no external storage needed)
 - **Pricing**: 1K: ~$0.10, 2K: ~$0.13, 4K: ~$0.24 per image
 - **Full capabilities**: Text-to-image, image-to-image, LLM, vision
-- **Limitation**: No built-in file storage (requires external URLs for reference images)
 
 **Custom Providers**:
 Users can add custom REST API providers via UI:
@@ -322,13 +322,18 @@ const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')).d
 
 1. User selects file → FileReader reads as base64 for preview
 2. On generation start → Convert base64 to Blob
-3. Upload via `providerManager.getActive().uploadImage(blob)` → Get CDN URL
+3. Upload via `providerManager.getActive().uploadImage(blob)` → Get URL or data URL
 4. Use URL in edit endpoint for variations
 5. Include reference in ZIP output
 
+**Provider-Specific Upload Methods**:
+- **FAL.ai**: Uploads to `fal.storage.upload()` → Returns CDN URL
+- **Kie.ai**: Uploads to `kieai.redpandaai.co/api/file-stream-upload` → Returns CDN URL
+- **Wisdom Gate**: Converts to base64 data URL via FileReader → Returns `data:image/png;base64,...`
+
 **Implementation**:
 - `handleReferenceUpload()` - Reads file and updates preview
-- `uploadReferenceImage()` - Uploads to provider storage
+- `uploadReferenceImage()` - Uploads to provider (method varies by provider)
 - `clearReference()` - Clears preview and state
 
 ## Configuration Options

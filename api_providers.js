@@ -444,9 +444,18 @@ export class WisdomGateProvider extends ApiProvider {
     }
 
     async uploadImage(blob) {
-        // Wisdom Gate doesn't have a dedicated storage endpoint
-        // Would need external storage or base64 encoding
-        throw new Error('Wisdom Gate requires image URLs. Upload images to external storage first.');
+        // Wisdom Gate supports base64 data URLs (OpenAI-compatible)
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                // Return base64 data URL (e.g., "data:image/png;base64,iVBORw0KG...")
+                resolve(reader.result);
+            };
+            reader.onerror = () => {
+                reject(new Error('Failed to convert image to base64'));
+            };
+            reader.readAsDataURL(blob);
+        });
     }
 
     async generateImage({ prompt, aspectRatio, resolution, model, dynamicParams = {} }) {
