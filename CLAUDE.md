@@ -26,6 +26,7 @@ The app uses a **Provider Pattern** to support multiple AI providers:
 - `ApiProvider` - Base class defining interface (abstract)
 - `FalProvider` - FAL.ai implementation (default)
 - `KieProvider` - Kie.ai implementation (Seedream 4.5, ~80% cheaper)
+- `WisdomGateProvider` - Wisdom Gate implementation (OpenAI-compatible, full capabilities)
 - `GenericProvider` - Configurable REST API wrapper for custom providers
 - `ProviderManager` - Singleton managing all providers
 
@@ -114,6 +115,30 @@ Key Kie.ai endpoints:
 - Response: `result.outputMediaUrls[0].mediaUrl` or `result.output[0]`
 - **Pricing**: 6.5 credits/image ≈ $0.032 (~80% cheaper than FAL.ai)
 - **Limitation**: No LLM/vision support (use FAL.ai for those features)
+
+**Wisdom Gate Provider**:
+Uses OpenAI-compatible API with unified chat completions endpoint:
+- Base URL: `https://wisdom-gate.juheapi.com/v1`
+- Chat completions: `POST /v1/chat/completions` (text & image generation)
+- Video generation: `POST /v1/videos` (Sora 2 Pro)
+- Authorization: `Bearer {apiKey}`
+
+Key Wisdom Gate models:
+- `gemini-3-pro-image-preview` - Nano Banana Pro (image generation & editing)
+- `grok-4-image` - Grok 4 Image generation
+- `wisdom-ai-gpt5` - GPT-5 for LLM
+- `wisdom-ai-claude-sonnet-4` - Claude Sonnet 4
+- `sora-2-pro` - Video generation
+
+**Implementation details**:
+- OpenAI-compatible API (same endpoint for text & images)
+- Image generation via chat completions with `image_config` parameter
+- Image editing via multimodal messages (text + image_url)
+- Response format: Image URL in markdown `![image](https://...)`
+- Regex extraction: `/https:\/\/[^)]+\.(png|jpg|jpeg)/`
+- **Pricing**: 1K: ~$0.10, 2K: ~$0.13, 4K: ~$0.24 per image
+- **Full capabilities**: Text-to-image, image-to-image, LLM, vision
+- **Limitation**: No built-in file storage (requires external URLs for reference images)
 
 **Custom Providers**:
 Users can add custom REST API providers via UI:
@@ -528,6 +553,7 @@ LoRAFactory:
 **Supported Providers**:
 - ✅ **FAL.ai** - Full support (image generation, editing, LLM, vision)
 - ✅ **Kie.ai** - Seedream 4.5 only (~80% cheaper, $0.032/image)
+- ✅ **Wisdom Gate** - OpenAI-compatible API (full capabilities: image, LLM, vision)
 - ✅ **Custom** - Add any REST API provider via UI
 
 **Credits**: Original project by [Lovis.io](https://lovis.io) - All core functionality belongs to the original.

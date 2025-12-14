@@ -425,6 +425,195 @@ export class KieProvider extends ApiProvider {
 }
 
 // =============================================================================
+// Wisdom Gate Provider (OpenAI-compatible API)
+// =============================================================================
+
+export class WisdomGateProvider extends ApiProvider {
+    constructor() {
+        super({
+            id: 'wisdomgate',
+            name: 'Wisdom Gate',
+            capabilities: ['text-to-image', 'image-to-image', 'llm', 'vision']
+        });
+        this.apiKey = null;
+        this.baseUrl = 'https://wisdom-gate.juheapi.com/v1';
+    }
+
+    async setApiKey(key) {
+        this.apiKey = key;
+    }
+
+    async uploadImage(blob) {
+        // Wisdom Gate doesn't have a dedicated storage endpoint
+        // Would need external storage or base64 encoding
+        throw new Error('Wisdom Gate requires image URLs. Upload images to external storage first.');
+    }
+
+    async generateImage({ prompt, aspectRatio, resolution, model, dynamicParams = {} }) {
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: model || 'gemini-3-pro-image-preview',
+                messages: [{ role: 'user', content: prompt }],
+                image_config: {
+                    aspect_ratio: dynamicParams.aspect_ratio || aspectRatio || '16:9',
+                    image_size: dynamicParams.image_size || resolution || '2K'
+                },
+                enable_safety_checker: dynamicParams.enable_safety_checker !== undefined
+                    ? dynamicParams.enable_safety_checker
+                    : false,
+                ...dynamicParams
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Wisdom Gate error (${response.status}): ${error}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+
+        // Extract image URL from markdown format: ![image](https://...)
+        const imageUrlMatch = content.match(/https:\/\/[^)]+\.(png|jpg|jpeg)/);
+        if (!imageUrlMatch) {
+            throw new Error(`No image URL found in response: ${content}`);
+        }
+
+        return imageUrlMatch[0];
+    }
+
+    async editImage({ sourceUrl, prompt, resolution, model, editEndpoint, dynamicParams = {} }) {
+        // Wisdom Gate uses vision capabilities for image editing
+        // Send image URL in messages with multimodal content
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: model || 'gemini-3-pro-image-preview',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: prompt
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: sourceUrl
+                            }
+                        }
+                    ]
+                }],
+                image_config: {
+                    aspect_ratio: 'auto',
+                    image_size: dynamicParams.image_size || resolution || '2K'
+                },
+                enable_safety_checker: dynamicParams.enable_safety_checker !== undefined
+                    ? dynamicParams.enable_safety_checker
+                    : false,
+                ...dynamicParams
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Wisdom Gate error (${response.status}): ${error}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+
+        // Extract image URL from markdown format
+        const imageUrlMatch = content.match(/https:\/\/[^)]+\.(png|jpg|jpeg)/);
+        if (!imageUrlMatch) {
+            throw new Error(`No image URL found in response: ${content}`);
+        }
+
+        return imageUrlMatch[0];
+    }
+
+    async generatePrompts({ systemPrompt, userPrompt, count, model }) {
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: model || 'wisdom-ai-gpt5',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: 1.0,
+                max_tokens: 16000
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Wisdom Gate error (${response.status}): ${error}`);
+        }
+
+        const data = await response.json();
+        const text = data.choices[0].message.content;
+
+        // Parse JSON output
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) {
+            throw new Error('Failed to parse LLM response');
+        }
+        return JSON.parse(jsonMatch[0]);
+    }
+
+    async captionImage({ imageUrl, model }) {
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: model || 'gemini-3-pro-image-preview',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: "Caption this image for a text-to-image model. Describe everything visible in detail: subject, appearance, clothing, pose, expression, background, lighting, colors, style. Be specific and comprehensive."
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: imageUrl
+                            }
+                        }
+                    ]
+                }],
+                temperature: 1.0
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Wisdom Gate error (${response.status}): ${error}`);
+        }
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+    }
+}
+
+// =============================================================================
 // Provider Manager (Singleton)
 // =============================================================================
 
@@ -436,6 +625,7 @@ class ProviderManager {
         // Register default providers
         this.register(new FalProvider());
         this.register(new KieProvider());
+        this.register(new WisdomGateProvider());
     }
 
     register(provider) {

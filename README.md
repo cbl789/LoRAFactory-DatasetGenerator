@@ -114,12 +114,13 @@ npx serve .
 ## 🔑 API Keys
 
 1. Click the 🔑 button in the app
-2. Select your provider (FAL.ai, Kie.ai, or custom)
+2. Select your provider (FAL.ai, Kie.ai, Wisdom Gate, or custom)
 3. Enter your API key and save
 
 **Get API Keys**:
 - **FAL.ai**: [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)
 - **Kie.ai**: [kie.ai](https://kie.ai) - 19% cheaper than official Seedream pricing
+- **Wisdom Gate**: [wisdom-gate.juheapi.com](https://wisdom-gate.juheapi.com) - OpenAI-compatible API with Gemini 3 Pro Image
 - **Custom**: Add any REST API provider via UI
 
 **Security**: Your keys are stored ONLY in your browser's localStorage. They're never sent anywhere except directly to the selected provider's servers.
@@ -169,6 +170,19 @@ Vision captions: ~$0.002 per image
 - Single/Reference Mode: 20 images × $0.032 = ~$0.64
 
 **Note**: Kie.ai is ~80% cheaper than FAL.ai! LLM/Vision features still require FAL.ai.
+
+### Wisdom Gate (Gemini 3 Pro Image)
+| Resolution | Cost per image |
+|------------|----------------|
+| 1K | ~$0.10 |
+| 2K | ~$0.13 |
+| 4K | ~$0.24 |
+
+**Examples**:
+- Pair Mode: 20 pairs × 2 images × $0.13 = ~$5.20
+- Single/Reference Mode: 20 images × $0.13 = ~$2.60
+
+**Note**: Wisdom Gate supports full LLM and vision capabilities. ~33% cheaper than FAL.ai for 2K images.
 
 ## 📦 Output Format
 
