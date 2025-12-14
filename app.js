@@ -410,6 +410,11 @@ function populateProviderDropdown() {
             try {
                 localStorage.setItem('active_provider_id', select.value);
             } catch (e) {}
+
+            // Repopulate model dropdowns for new provider
+            populateImageModels();
+            populateLLMModels();
+
             // Reload key for this provider
             const key = await getApiKey();
             try {
@@ -1084,54 +1089,9 @@ async function captionImage(imageUrl, model) {
 // LLM Prompt Generation
 // =============================================================================
 
-/**
- * Map generic LLM model names to provider-specific names
- * TODO: Future enhancement - allow per-task provider selection
- * (e.g., use FAL for LLM, Wisdom Gate for images)
- */
-function mapLLMModelToProvider(genericModel, provider) {
-    const providerId = provider?.id || providerManager.getActive().id;
-
-    // Wisdom Gate model mapping
-    if (providerId === 'wisdomgate') {
-        const wisdomGateModels = {
-            'google/gemini-2.5-flash': 'wisdom-ai-gpt5',
-            'google/gemini-2.5-pro': 'wisdom-ai-gpt5',
-            'anthropic/claude-3.5-sonnet': 'wisdom-ai-claude-sonnet-4',
-            'anthropic/claude-3-5-sonnet': 'wisdom-ai-claude-sonnet-4',
-            'openai/gpt-4o': 'wisdom-ai-gpt5',
-            'deepseek-r1': 'deepseek-r1',
-            'deepseek-v3': 'deepseek-v3'
-        };
-        return wisdomGateModels[genericModel] || 'deepseek-r1'; // Free model as fallback
-    }
-
-    // FAL.ai and Kie.ai use OpenRouter-style names - pass through
-    if (providerId === 'fal' || providerId === 'kie') {
-        return genericModel;
-    }
-
-    // Custom providers - pass through
-    return genericModel;
-}
-
 async function generatePromptsWithLLM(theme, transformation, actionName, numPrompts, model) {
     const customSystemPrompt = getSystemPrompt();
     let prompts = [];
-
-    // Map model name to provider-specific name
-    const mappedModel = mapLLMModelToProvider(model);
-    const actualModel = mappedModel;
-
-    // Log model mapping for debugging
-    if (window.monitor && model !== actualModel) {
-        window.monitor.logEvent('LLM', 'Model Mapped', {
-            provider: providerManager.getActive().id,
-            requested: model,
-            mapped: actualModel
-        });
-        console.log(`🔄 LLM model mapped: ${model} → ${actualModel}`);
-    }
 
     if (state.mode === 'pair') {
         // Pair mode logic
@@ -1155,7 +1115,7 @@ Return ONLY valid JSON array:
   }
 ]`;
         prompts = await providerManager.getActive().generatePrompts({
-            systemPrompt, userPrompt, count: numPrompts, model: actualModel
+            systemPrompt, userPrompt, count: numPrompts, model: model
         });
 
     } else if (state.mode === 'single') {
@@ -1171,7 +1131,7 @@ Return ONLY valid JSON array:
             systemPrompt: customSystemPrompt,
             userPrompt,
             count: numPrompts,
-            model: actualModel
+            model: model
         });
 
     } else if (state.mode === 'reference') {
@@ -1190,7 +1150,7 @@ Return ONLY valid JSON array:
             systemPrompt: customSystemPrompt,
             userPrompt,
             count: numPrompts,
-            model: actualModel
+            model: model
         });
     }
 
@@ -1660,9 +1620,11 @@ async function startGeneration() {
     }
 
     // Validate model supports edit for pair/reference modes
-    const selectedModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    const provider = providerManager.getActive();
+    const providerModels = provider.getSupportedModels().imageModels;
+    const selectedModel = providerModels.find(m => m.id === state.imageModel);
     if ((state.mode === 'pair' || state.mode === 'reference') && selectedModel && !selectedModel.supportsEdit) {
-        alert(`⚠️ ${selectedModel.name} doesn't support image editing.\n\nPair mode and Reference mode require edit support.\nPlease select a different model (e.g., Nano Banana Pro) or switch to Single Image mode.`);
+        alert(`⚠️ ${selectedModel.name} doesn't support image editing.\n\nPair mode and Reference mode require edit support.\nPlease select a different model or switch to Single Image mode.`);
         return;
     }
 
@@ -2118,9 +2080,9 @@ async function fetchModelsFromFAL(apiKey = null) {
 function populateImageModels() {
     // Get unified panel select (this is the only select now)
     const select = document.querySelector('#modelParametersPanel #imageModel');
-    const descElement = document.querySelector('#modelParametersPanel #imageModelDesc') || 
+    const descElement = document.querySelector('#modelParametersPanel #imageModelDesc') ||
                         document.querySelector('#modelParametersPanel .model-info small');
-    
+
     if (!select) {
         console.error('Model select element not found in unified panel');
         return;
@@ -2129,42 +2091,46 @@ function populateImageModels() {
     // Clear existing options
     select.innerHTML = '';
 
-    // Verify IMAGE_MODELS is populated
-    if (!IMAGE_MODELS || IMAGE_MODELS.length === 0) {
-        console.error('IMAGE_MODELS is empty! Cannot populate dropdown.');
-        descElement.textContent = 'Error: No models available. Check console for details.';
+    // Get models from active provider
+    const provider = providerManager.getActive();
+    const models = provider.getSupportedModels().imageModels;
+
+    // Verify models available
+    if (!models || models.length === 0) {
+        console.warn(`Provider ${provider.name} has no image models available`);
+        descElement.textContent = `No image models available for ${provider.name}`;
         return;
     }
-    
-    console.log(`[populateImageModels] Populating dropdown with ${IMAGE_MODELS.length} models:`, IMAGE_MODELS);
+
+    console.log(`[populateImageModels] Populating dropdown with ${models.length} models from ${provider.name}:`, models);
 
     // Add models to dropdown
-    let apiPricingCount = 0;
-    let fallbackPricingCount = 0;
-    
-    IMAGE_MODELS.forEach(model => {
+    models.forEach(model => {
         const option = document.createElement('option');
         option.value = model.id;
-        
-        // Track pricing source
-        if (model.pricingSource === 'api') {
-            apiPricingCount++;
-        } else {
-            fallbackPricingCount++;
-        }
-        
+
         option.textContent = `${model.name} v${model.version} - ${model.pricing}`;
         if (!model.supportsEdit) {
             option.textContent += ' (no edit)';
         }
         select.appendChild(option);
     });
-    
-    // Log pricing summary
-    console.log(`[populateImageModels] Pricing summary: ${apiPricingCount} from API, ${fallbackPricingCount} fallback`);
 
-    // Set default value
-    select.value = state.imageModel;
+    // Update description
+    descElement.textContent = `${models.length} models available from ${provider.name}`;
+
+    // Set default value - check if current model exists for this provider
+    if (models.find(m => m.id === state.imageModel)) {
+        select.value = state.imageModel;
+    } else {
+        // Current model doesn't exist for this provider, select first available
+        console.log(`[populateImageModels] Current model ${state.imageModel} not available for ${provider.name}, selecting first available model`);
+        state.imageModel = models[0].id;
+        select.value = models[0].id;
+        try {
+            localStorage.setItem('selected_image_model', models[0].id);
+        } catch (e) {}
+    }
 
     // Handle model change
     const handleModelChange = async (e) => {
@@ -2173,12 +2139,12 @@ function populateImageModels() {
         try {
             localStorage.setItem('selected_image_model', newModelId);
         } catch (e) {}
-        
-        const selectedModel = IMAGE_MODELS.find(m => m.id === newModelId);
+
+        const selectedModel = models.find(m => m.id === newModelId);
         if (selectedModel) {
             // Update description
             if (descElement) {
-                descElement.textContent = `v${selectedModel.version} - ${selectedModel.description}`;
+                descElement.textContent = `${provider.name}: ${selectedModel.name} v${selectedModel.version} - ${selectedModel.pricing}`;
             }
 
             // Warn if model doesn't support edit and user is in pair/reference mode
@@ -2203,9 +2169,9 @@ function populateImageModels() {
     select.addEventListener('change', handleModelChange);
 
     // Set initial description
-    const initialModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    const initialModel = models.find(m => m.id === state.imageModel);
     if (initialModel && descElement) {
-        descElement.textContent = `v${initialModel.version} - ${initialModel.description}`;
+        descElement.textContent = `${provider.name}: ${initialModel.name} v${initialModel.version} - ${initialModel.pricing}`;
     }
     
     // Ensure panel is visible (remove hidden class if present)
@@ -2230,6 +2196,65 @@ function populateImageModels() {
             }
         }, 100);
     }
+}
+
+// =============================================================================
+// LLM Model Selection
+// =============================================================================
+
+function populateLLMModels() {
+    const select = document.getElementById('llmModel');
+    if (!select) {
+        console.error('LLM model select element not found');
+        return;
+    }
+
+    // Clear existing options
+    select.innerHTML = '';
+
+    // Get models from active provider
+    const provider = providerManager.getActive();
+    const models = provider.getSupportedModels().llmModels;
+
+    // Check if provider supports LLM
+    if (!models || models.length === 0) {
+        console.warn(`Provider ${provider.name} has no LLM models available`);
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = `${provider.name} does not support LLM`;
+        option.disabled = true;
+        select.appendChild(option);
+        select.disabled = true;
+        return;
+    }
+
+    console.log(`[populateLLMModels] Populating dropdown with ${models.length} LLM models from ${provider.name}:`, models);
+
+    // Add models to dropdown
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = `${model.name} - ${model.pricing}`;
+        select.appendChild(option);
+    });
+
+    // Enable select
+    select.disabled = false;
+
+    // Try to restore previous selection, or select first model
+    const savedModel = localStorage.getItem('selected_llm_model');
+    if (savedModel && models.find(m => m.id === savedModel)) {
+        select.value = savedModel;
+    } else if (models.length > 0) {
+        select.value = models[0].id;
+    }
+
+    // Save selection on change
+    select.addEventListener('change', (e) => {
+        try {
+            localStorage.setItem('selected_llm_model', e.target.value);
+        } catch (err) {}
+    });
 }
 
 // =============================================================================
@@ -2298,6 +2323,7 @@ async function init() {
     // Populate image models dropdown (wait a tick to ensure IMAGE_MODELS is populated)
     await new Promise(resolve => setTimeout(resolve, 0));
     populateImageModels();
+    populateLLMModels();
 
     // Configure providers with API key
     if (apiKey) {

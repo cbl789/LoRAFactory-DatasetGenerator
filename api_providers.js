@@ -24,6 +24,12 @@ export class ApiProvider {
     async editImage(params) { throw new Error("Not implemented"); }
     async generatePrompts(params) { throw new Error("Not implemented"); }
     async captionImage(params) { throw new Error("Not implemented"); }
+
+    // Model Discovery
+    getSupportedModels() {
+        // Returns { imageModels: [...], llmModels: [...] }
+        throw new Error("Not implemented");
+    }
 }
 
 // =============================================================================
@@ -136,6 +142,36 @@ export class FalProvider extends ApiProvider {
             temperature: 1.0
         });
         return result.output;
+    }
+
+    getSupportedModels() {
+        // FAL uses dynamic model discovery from API
+        // Image models are populated in app.js via fetchModelsFromFAL()
+        return {
+            imageModels: window.IMAGE_MODELS || [],
+            llmModels: [
+                {
+                    id: 'google/gemini-2.5-flash',
+                    name: 'Gemini 2.5 Flash',
+                    pricing: '$0.075/$0.30 per 1M tokens'
+                },
+                {
+                    id: 'google/gemini-2.5-pro',
+                    name: 'Gemini 2.5 Pro',
+                    pricing: '$1.25/$5.00 per 1M tokens'
+                },
+                {
+                    id: 'anthropic/claude-3.5-sonnet',
+                    name: 'Claude 3.5 Sonnet',
+                    pricing: '$3.00/$15.00 per 1M tokens'
+                },
+                {
+                    id: 'openai/gpt-4o',
+                    name: 'GPT-4o',
+                    pricing: '$2.50/$10.00 per 1M tokens'
+                }
+            ]
+        };
     }
 }
 
@@ -259,6 +295,15 @@ export class GenericProvider extends ApiProvider {
             return await this._request('captionImage', params);
         }
         throw new Error(`${this.name} does not support image captioning`);
+    }
+
+    getSupportedModels() {
+        // Generic providers are user-configured, models are dynamic
+        // Return empty for now - could be extended to support model config
+        return {
+            imageModels: [],
+            llmModels: []
+        };
     }
 }
 
@@ -421,6 +466,23 @@ export class KieProvider extends ApiProvider {
 
     async captionImage(params) {
         throw new Error('Kie.ai does not support image captioning. Use FAL.ai for vision features.');
+    }
+
+    getSupportedModels() {
+        // Kie.ai only supports Seedream 4.5
+        return {
+            imageModels: [
+                {
+                    id: 'seedream/4.5-text-to-image',
+                    name: 'Seedream',
+                    version: '4.5',
+                    pricing: '~$0.032/image (~80% cheaper than FAL)',
+                    supportsEdit: true,
+                    pricingSource: 'manual'
+                }
+            ],
+            llmModels: [] // Kie.ai has no LLM support
+        };
     }
 }
 
@@ -687,6 +749,52 @@ export class WisdomGateProvider extends ApiProvider {
 
         const data = await response.json();
         return data.choices[0].message.content;
+    }
+
+    getSupportedModels() {
+        // Wisdom Gate supported models based on wisdom-gate-api-documentation.md
+        return {
+            imageModels: [
+                {
+                    id: 'gemini-3-pro-image-preview',
+                    name: 'Gemini 3 Pro Image',
+                    version: 'Preview',
+                    pricing: 'Contact provider',
+                    supportsEdit: true,
+                    pricingSource: 'manual'
+                },
+                {
+                    id: 'grok-4-image',
+                    name: 'Grok 4 Image',
+                    version: '4.0',
+                    pricing: 'Contact provider',
+                    supportsEdit: true,
+                    pricingSource: 'manual'
+                }
+            ],
+            llmModels: [
+                {
+                    id: 'wisdom-ai-gpt5',
+                    name: 'Wisdom AI GPT-5',
+                    pricing: 'Contact provider'
+                },
+                {
+                    id: 'wisdom-ai-claude-sonnet-4',
+                    name: 'Wisdom AI Claude Sonnet 4',
+                    pricing: 'Contact provider'
+                },
+                {
+                    id: 'deepseek-r1',
+                    name: 'DeepSeek R1',
+                    pricing: 'Free'
+                },
+                {
+                    id: 'deepseek-v3',
+                    name: 'DeepSeek V3',
+                    pricing: 'Contact provider'
+                }
+            ]
+        };
     }
 }
 
