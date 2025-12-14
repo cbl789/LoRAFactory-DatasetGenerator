@@ -126,6 +126,10 @@ let IMAGE_MODELS = [
     }
 ];
 
+try {
+    window.IMAGE_MODELS = IMAGE_MODELS;
+} catch (e) {}
+
 // Models we want to fetch (curated list)
 const CURATED_MODEL_IDS = [
     'fal-ai/nano-banana-pro',
@@ -713,14 +717,16 @@ function saveSystemPrompt() {
     document.getElementById('promptNameInput').value = '';
     
     // Show confirmation
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '✓ Saved!';
-    btn.style.background = 'var(--success)';
-    setTimeout(() => {
-        btn.textContent = originalText;
-        btn.style.background = '';
-    }, 2000);
+    const btn = document.getElementById('systemPromptSection')?.querySelector('button[onclick^="saveSystemPrompt"]');
+    if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Saved!';
+        btn.style.background = 'var(--success)';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+        }, 2000);
+    }
 }
 
 function loadSavedPrompt() {
@@ -745,14 +751,16 @@ function loadSavedPrompt() {
     document.getElementById('promptNameInput').value = name;
     
     // Show confirmation
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '✓ Loaded!';
-    btn.style.background = 'var(--success)';
-    setTimeout(() => {
-        btn.textContent = originalText;
-        btn.style.background = '';
-    }, 1500);
+    const btn = document.getElementById('systemPromptSection')?.querySelector('button[onclick^="loadSavedPrompt"]');
+    if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Loaded!';
+        btn.style.background = 'var(--success)';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+        }, 1500);
+    }
 }
 
 function deleteSavedPrompt() {
@@ -822,14 +830,16 @@ function exportSystemPrompts() {
     URL.revokeObjectURL(url);
     
     // Show confirmation
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '✓ Exported!';
-    btn.style.background = 'var(--success)';
-    setTimeout(() => {
-        btn.textContent = originalText;
-        btn.style.background = '';
-    }, 2000);
+    const btn = document.getElementById('systemPromptSection')?.querySelector('button[onclick^="exportSystemPrompts"]');
+    if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Exported!';
+        btn.style.background = 'var(--success)';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+        }, 2000);
+    }
 }
 
 function importSystemPrompts(event) {
@@ -1364,17 +1374,17 @@ window.toggleSection = function (sectionId) {
 // Toggle prompts visibility (all)
 function togglePrompts(itemId) {
     const promptsDiv = document.getElementById(`prompts-${itemId}`);
-    const button = event.currentTarget;
-    const icon = button.querySelector('.toggle-icon');
+    const button = window.event?.currentTarget;
+    const icon = button ? button.querySelector('.toggle-icon') : null;
 
     const isCollapsed = promptsDiv.classList.contains('collapsed');
 
     if (isCollapsed) {
         promptsDiv.classList.remove('collapsed');
-        icon.textContent = '▲';
+        if (icon) icon.textContent = '▲';
     } else {
         promptsDiv.classList.add('collapsed');
-        icon.textContent = '▼';
+        if (icon) icon.textContent = '▼';
     }
 }
 
@@ -2019,6 +2029,9 @@ async function fetchModelsFromFAL(apiKey = null) {
 
         if (models.length > 0) {
             IMAGE_MODELS = models;
+            try {
+                window.IMAGE_MODELS = IMAGE_MODELS;
+            } catch (e) {}
             console.log('Models loaded successfully:', models.length);
         } else {
             throw new Error('No models were built');
@@ -2073,6 +2086,10 @@ async function fetchModelsFromFAL(apiKey = null) {
             };
         });
 
+        try {
+            window.IMAGE_MODELS = IMAGE_MODELS;
+        } catch (e) {}
+
         console.log('Fallback models loaded:', IMAGE_MODELS.length);
     }
 }
@@ -2083,7 +2100,7 @@ async function fetchModelsFromFAL(apiKey = null) {
 
 function populateImageModels() {
     // Get unified panel select (this is the only select now)
-    const select = document.querySelector('#modelParametersPanel #imageModel');
+    let select = document.querySelector('#modelParametersPanel #imageModel');
     const descElement = document.querySelector('#modelParametersPanel #imageModelDesc') ||
                         document.querySelector('#modelParametersPanel .model-info small');
 
@@ -2169,7 +2186,10 @@ function populateImageModels() {
         updateCostEstimate();
     };
 
-    // Add event listener
+    // Avoid accumulating listeners on repeated calls
+    const cloned = select.cloneNode(true);
+    select.parentNode.replaceChild(cloned, select);
+    select = cloned;
     select.addEventListener('change', handleModelChange);
 
     // Set initial description
@@ -2213,8 +2233,13 @@ function populateLLMModels() {
         return;
     }
 
+    // Avoid accumulating listeners on repeated calls
+    const cloned = select.cloneNode(true);
+    select.parentNode.replaceChild(cloned, select);
+    const llmSelect = cloned;
+
     // Clear existing options
-    select.innerHTML = '';
+    llmSelect.innerHTML = '';
 
     // Get models from active provider
     const provider = providerManager.getActive();
@@ -2227,8 +2252,8 @@ function populateLLMModels() {
         option.value = '';
         option.textContent = `${provider.name} does not support LLM`;
         option.disabled = true;
-        select.appendChild(option);
-        select.disabled = true;
+        llmSelect.appendChild(option);
+        llmSelect.disabled = true;
         return;
     }
 
@@ -2239,22 +2264,22 @@ function populateLLMModels() {
         const option = document.createElement('option');
         option.value = model.id;
         option.textContent = `${model.name} - ${model.pricing}`;
-        select.appendChild(option);
+        llmSelect.appendChild(option);
     });
 
     // Enable select
-    select.disabled = false;
+    llmSelect.disabled = false;
 
     // Try to restore previous selection, or select first model
     const savedModel = localStorage.getItem('selected_llm_model');
     if (savedModel && models.find(m => m.id === savedModel)) {
-        select.value = savedModel;
+        llmSelect.value = savedModel;
     } else if (models.length > 0) {
-        select.value = models[0].id;
+        llmSelect.value = models[0].id;
     }
 
     // Save selection on change
-    select.addEventListener('change', (e) => {
+    llmSelect.addEventListener('change', (e) => {
         try {
             localStorage.setItem('selected_llm_model', e.target.value);
         } catch (err) {}
@@ -2386,7 +2411,6 @@ async function init() {
             uploadZone.classList.remove('dragover');
             const file = e.dataTransfer.files[0];
             if (file && file.type.startsWith('image/')) {
-                document.getElementById('referenceInput').files = e.dataTransfer.files;
                 handleReferenceUpload({ target: { files: [file] } });
             }
         });

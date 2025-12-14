@@ -49,7 +49,7 @@ export class SchemaManager {
         // For other providers (Wisdom Gate, Kie.ai, etc.), return minimal schema
         if (!modelId.startsWith('fal-ai/') && !modelId.startsWith('openrouter/')) {
             console.log(`[SchemaManager] Non-FAL model ${modelId}, using minimal schema`);
-            const minimalSchema = { parameters: [], raw: null };
+            const minimalSchema = this._getMinimalSchema(modelId);
             this.schemas.set(modelId, minimalSchema);
             return minimalSchema;
         }

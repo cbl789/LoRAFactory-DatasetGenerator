@@ -759,7 +759,7 @@ export class WisdomGateProvider extends ApiProvider {
                     id: 'gemini-3-pro-image-preview',
                     name: 'Gemini 3 Pro Image',
                     version: 'Preview',
-                    pricing: 'Contact provider',
+                    pricing: '1K: ~$0.10, 2K: ~$0.13, 4K: ~$0.24',
                     supportsEdit: true,
                     pricingSource: 'manual'
                 },
@@ -768,7 +768,7 @@ export class WisdomGateProvider extends ApiProvider {
                     name: 'Grok 4 Image',
                     version: '4.0',
                     pricing: 'Contact provider',
-                    supportsEdit: true,
+                    supportsEdit: false, // Grok 4 only supports generation, not editing
                     pricingSource: 'manual'
                 }
             ],
