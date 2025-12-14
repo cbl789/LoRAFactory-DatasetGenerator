@@ -996,8 +996,10 @@ async function generateStartImage(prompt, aspectRatio, resolution) {
 }
 
 async function generateEndImage(startImageUrl, editPrompt, aspectRatio, resolution) {
-    // Check if model supports edit
-    const selectedModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    // Check if model supports edit (use provider models)
+    const provider = providerManager.getActive();
+    const providerModels = provider.getSupportedModels().imageModels;
+    const selectedModel = providerModels.find(m => m.id === state.imageModel);
     if (!selectedModel || !selectedModel.supportsEdit) {
         throw new Error(`Model ${state.imageModel} doesn't support image editing. Please select a model with edit support for Pair mode.`);
     }
@@ -1048,8 +1050,10 @@ async function generateSingleImage(prompt, aspectRatio, resolution) {
 }
 
 async function generateReferenceVariation(referenceUrl, prompt, aspectRatio, resolution) {
-    // Check if model supports edit
-    const selectedModel = IMAGE_MODELS.find(m => m.id === state.imageModel);
+    // Check if model supports edit (use provider models)
+    const provider = providerManager.getActive();
+    const providerModels = provider.getSupportedModels().imageModels;
+    const selectedModel = providerModels.find(m => m.id === state.imageModel);
     if (!selectedModel || !selectedModel.supportsEdit) {
         throw new Error(`Model ${state.imageModel} doesn't support image editing. Please select a model with edit support for Reference mode.`);
     }

@@ -24,7 +24,7 @@ export class SchemaManager {
 
     /**
      * Fetch OpenAPI schema for a model
-     * @param {string} modelId - FAL model ID (e.g., "fal-ai/nano-banana-pro")
+     * @param {string} modelId - Model ID (e.g., "fal-ai/nano-banana-pro")
      * @returns {Promise<Object>} Parsed schema with parameters
      */
     async fetchSchema(modelId) {
@@ -43,6 +43,15 @@ export class SchemaManager {
             } catch (e) {
                 console.warn('Failed to parse cached schema:', e);
             }
+        }
+
+        // Only fetch schemas for FAL models from FAL.ai API
+        // For other providers (Wisdom Gate, Kie.ai, etc.), return minimal schema
+        if (!modelId.startsWith('fal-ai/') && !modelId.startsWith('openrouter/')) {
+            console.log(`[SchemaManager] Non-FAL model ${modelId}, using minimal schema`);
+            const minimalSchema = { parameters: [], raw: null };
+            this.schemas.set(modelId, minimalSchema);
+            return minimalSchema;
         }
 
         // Fetch from FAL.ai API using REST API
