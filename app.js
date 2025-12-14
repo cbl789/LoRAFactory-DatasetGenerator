@@ -1084,9 +1084,54 @@ async function captionImage(imageUrl, model) {
 // LLM Prompt Generation
 // =============================================================================
 
+/**
+ * Map generic LLM model names to provider-specific names
+ * TODO: Future enhancement - allow per-task provider selection
+ * (e.g., use FAL for LLM, Wisdom Gate for images)
+ */
+function mapLLMModelToProvider(genericModel, provider) {
+    const providerId = provider?.id || providerManager.getActive().id;
+
+    // Wisdom Gate model mapping
+    if (providerId === 'wisdomgate') {
+        const wisdomGateModels = {
+            'google/gemini-2.5-flash': 'wisdom-ai-gpt5',
+            'google/gemini-2.5-pro': 'wisdom-ai-gpt5',
+            'anthropic/claude-3.5-sonnet': 'wisdom-ai-claude-sonnet-4',
+            'anthropic/claude-3-5-sonnet': 'wisdom-ai-claude-sonnet-4',
+            'openai/gpt-4o': 'wisdom-ai-gpt5',
+            'deepseek-r1': 'deepseek-r1',
+            'deepseek-v3': 'deepseek-v3'
+        };
+        return wisdomGateModels[genericModel] || 'deepseek-r1'; // Free model as fallback
+    }
+
+    // FAL.ai and Kie.ai use OpenRouter-style names - pass through
+    if (providerId === 'fal' || providerId === 'kie') {
+        return genericModel;
+    }
+
+    // Custom providers - pass through
+    return genericModel;
+}
+
 async function generatePromptsWithLLM(theme, transformation, actionName, numPrompts, model) {
     const customSystemPrompt = getSystemPrompt();
     let prompts = [];
+
+    // Map model name to provider-specific name
+    const mappedModel = mapLLMModelToProvider(model);
+    const actualModel = mappedModel;
+
+    // Log model mapping for debugging
+    if (window.monitor && model !== actualModel) {
+        window.monitor.logEvent('LLM', 'Model Mapped', {
+            provider: providerManager.getActive().id,
+            requested: model,
+            mapped: actualModel
+        });
+        console.log(`🔄 LLM model mapped: ${model} → ${actualModel}`);
+    }
 
     if (state.mode === 'pair') {
         // Pair mode logic
@@ -1110,7 +1155,7 @@ Return ONLY valid JSON array:
   }
 ]`;
         prompts = await providerManager.getActive().generatePrompts({
-            systemPrompt, userPrompt, count: numPrompts, model
+            systemPrompt, userPrompt, count: numPrompts, model: actualModel
         });
 
     } else if (state.mode === 'single') {
@@ -1126,7 +1171,7 @@ Return ONLY valid JSON array:
             systemPrompt: customSystemPrompt,
             userPrompt,
             count: numPrompts,
-            model
+            model: actualModel
         });
 
     } else if (state.mode === 'reference') {
@@ -1145,7 +1190,7 @@ Return ONLY valid JSON array:
             systemPrompt: customSystemPrompt,
             userPrompt,
             count: numPrompts,
-            model
+            model: actualModel
         });
     }
 

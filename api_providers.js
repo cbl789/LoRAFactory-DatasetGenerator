@@ -445,109 +445,177 @@ export class WisdomGateProvider extends ApiProvider {
 
     async uploadImage(blob) {
         // Wisdom Gate supports base64 data URLs (OpenAI-compatible)
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                // Return base64 data URL (e.g., "data:image/png;base64,iVBORw0KG...")
-                resolve(reader.result);
-            };
-            reader.onerror = () => {
-                reject(new Error('Failed to convert image to base64'));
-            };
-            reader.readAsDataURL(blob);
-        });
+        const params = { size: blob.size, type: blob.type };
+
+        try {
+            const result = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    // Return base64 data URL (e.g., "data:image/png;base64,iVBORw0KG...")
+                    resolve(reader.result);
+                };
+                reader.onerror = () => {
+                    reject(new Error('Failed to convert image to base64'));
+                };
+                reader.readAsDataURL(blob);
+            });
+
+            if (window.monitor) {
+                window.monitor.logApiCall('WisdomGate', 'uploadImage', params,
+                    { dataUrlLength: result.length, preview: result.substring(0, 50) + '...' });
+            }
+
+            return result;
+        } catch (error) {
+            if (window.monitor) {
+                window.monitor.logApiCall('WisdomGate', 'uploadImage', params, null, error);
+            }
+            throw error;
+        }
     }
 
     async generateImage({ prompt, aspectRatio, resolution, model, dynamicParams = {} }) {
-        const response = await fetch(`${this.baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${this.apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: model || 'gemini-3-pro-image-preview',
-                messages: [{ role: 'user', content: prompt }],
-                image_config: {
-                    aspect_ratio: dynamicParams.aspect_ratio || aspectRatio || '16:9',
-                    image_size: dynamicParams.image_size || resolution || '2K'
+        const params = { prompt, aspectRatio, resolution, model, dynamicParams };
+
+        try {
+            const response = await fetch(`${this.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Content-Type': 'application/json'
                 },
-                enable_safety_checker: dynamicParams.enable_safety_checker !== undefined
-                    ? dynamicParams.enable_safety_checker
-                    : false,
-                ...dynamicParams
-            })
-        });
+                body: JSON.stringify({
+                    model: model || 'gemini-3-pro-image-preview',
+                    messages: [{ role: 'user', content: prompt }],
+                    image_config: {
+                        aspect_ratio: dynamicParams.aspect_ratio || aspectRatio || '16:9',
+                        image_size: dynamicParams.image_size || resolution || '2K'
+                    },
+                    enable_safety_checker: dynamicParams.enable_safety_checker !== undefined
+                        ? dynamicParams.enable_safety_checker
+                        : false,
+                    ...dynamicParams
+                })
+            });
 
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Wisdom Gate error (${response.status}): ${error}`);
+            if (!response.ok) {
+                const error = await response.text();
+                const err = new Error(`Wisdom Gate error (${response.status}): ${error}`);
+                if (window.monitor) {
+                    window.monitor.logApiCall('WisdomGate', 'generateImage', params, null, err);
+                }
+                throw err;
+            }
+
+            const data = await response.json();
+            const content = data.choices[0].message.content;
+
+            // Extract image URL from markdown format: ![image](https://...)
+            const imageUrlMatch = content.match(/https:\/\/[^)]+\.(png|jpg|jpeg)/);
+            if (!imageUrlMatch) {
+                const err = new Error(`No image URL found in response: ${content}`);
+                if (window.monitor) {
+                    window.monitor.logApiCall('WisdomGate', 'generateImage', params, null, err);
+                }
+                throw err;
+            }
+
+            const imageUrl = imageUrlMatch[0];
+
+            if (window.monitor) {
+                window.monitor.logApiCall('WisdomGate', 'generateImage', params, {
+                    imageUrl,
+                    tokens: data.usage?.total_tokens
+                });
+            }
+
+            return imageUrl;
+        } catch (error) {
+            if (window.monitor && error.message && !error.message.includes('Wisdom Gate error')) {
+                window.monitor.logApiCall('WisdomGate', 'generateImage', params, null, error);
+            }
+            throw error;
         }
-
-        const data = await response.json();
-        const content = data.choices[0].message.content;
-
-        // Extract image URL from markdown format: ![image](https://...)
-        const imageUrlMatch = content.match(/https:\/\/[^)]+\.(png|jpg|jpeg)/);
-        if (!imageUrlMatch) {
-            throw new Error(`No image URL found in response: ${content}`);
-        }
-
-        return imageUrlMatch[0];
     }
 
     async editImage({ sourceUrl, prompt, resolution, model, editEndpoint, dynamicParams = {} }) {
         // Wisdom Gate uses vision capabilities for image editing
         // Send image URL in messages with multimodal content
-        const response = await fetch(`${this.baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${this.apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: model || 'gemini-3-pro-image-preview',
-                messages: [{
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: prompt
-                        },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: sourceUrl
-                            }
-                        }
-                    ]
-                }],
-                image_config: {
-                    aspect_ratio: 'auto',
-                    image_size: dynamicParams.image_size || resolution || '2K'
+        const params = { sourceUrl: sourceUrl?.substring(0, 100) + '...', prompt, resolution, model, dynamicParams };
+
+        try {
+            const response = await fetch(`${this.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Content-Type': 'application/json'
                 },
-                enable_safety_checker: dynamicParams.enable_safety_checker !== undefined
-                    ? dynamicParams.enable_safety_checker
-                    : false,
-                ...dynamicParams
-            })
-        });
+                body: JSON.stringify({
+                    model: model || 'gemini-3-pro-image-preview',
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'text',
+                                text: prompt
+                            },
+                            {
+                                type: 'image_url',
+                                image_url: {
+                                    url: sourceUrl
+                                }
+                            }
+                        ]
+                    }],
+                    image_config: {
+                        aspect_ratio: 'auto',
+                        image_size: dynamicParams.image_size || resolution || '2K'
+                    },
+                    enable_safety_checker: dynamicParams.enable_safety_checker !== undefined
+                        ? dynamicParams.enable_safety_checker
+                        : false,
+                    ...dynamicParams
+                })
+            });
 
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Wisdom Gate error (${response.status}): ${error}`);
+            if (!response.ok) {
+                const error = await response.text();
+                const err = new Error(`Wisdom Gate error (${response.status}): ${error}`);
+                if (window.monitor) {
+                    window.monitor.logApiCall('WisdomGate', 'editImage', params, null, err);
+                }
+                throw err;
+            }
+
+            const data = await response.json();
+            const content = data.choices[0].message.content;
+
+            // Extract image URL from markdown format
+            const imageUrlMatch = content.match(/https:\/\/[^)]+\.(png|jpg|jpeg)/);
+            if (!imageUrlMatch) {
+                const err = new Error(`No image URL found in response: ${content}`);
+                if (window.monitor) {
+                    window.monitor.logApiCall('WisdomGate', 'editImage', params, null, err);
+                }
+                throw err;
+            }
+
+            const imageUrl = imageUrlMatch[0];
+
+            if (window.monitor) {
+                window.monitor.logApiCall('WisdomGate', 'editImage', params, {
+                    imageUrl,
+                    tokens: data.usage?.total_tokens
+                });
+            }
+
+            return imageUrl;
+        } catch (error) {
+            if (window.monitor && error.message && !error.message.includes('Wisdom Gate error')) {
+                window.monitor.logApiCall('WisdomGate', 'editImage', params, null, error);
+            }
+            throw error;
         }
-
-        const data = await response.json();
-        const content = data.choices[0].message.content;
-
-        // Extract image URL from markdown format
-        const imageUrlMatch = content.match(/https:\/\/[^)]+\.(png|jpg|jpeg)/);
-        if (!imageUrlMatch) {
-            throw new Error(`No image URL found in response: ${content}`);
-        }
-
-        return imageUrlMatch[0];
     }
 
     async generatePrompts({ systemPrompt, userPrompt, count, model }) {
